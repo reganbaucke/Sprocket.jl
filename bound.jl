@@ -61,12 +61,12 @@ function Upperbound(problem, initial_lower, lipschitz_bound)
 
 	## for the control variables, set up the JuMP Variables
 	for key in keys(structure[1])
-		create_jump_variable(model,key,structure[1][key])
+		create_jump_variable(model,key,structure[1][key],(-lipschitz_bound,lipschitz_bound))
 	end
 
 	## for the random variables, set up the JuMP Variables
 	for key in keys(structure[2])
-		create_jump_variable(model,key,structure[2][key])
+		create_jump_variable(model,key,structure[2][key],(-lipschitz_bound,lipschitz_bound))
 	end
 
 	## add the intercept variable
@@ -153,10 +153,10 @@ function evaluate(upper::Upperbound,point)
 	if !isempty(control)
 		for key in keys(control)
 			if typeof(control[key]) <: Number
-				JuMP.set_objective_coefficient(lower.model.obj_dict[key],control[key])
+				JuMP.set_objective_coefficient(upper.model.obj_dict[key],control[key])
 			else
 				for (index,value) in enumerate(control[key])
-					JuMP.set_objective_coefficient(lower.model,lower.model.obj_dict[key][index],control[key][index])
+					JuMP.set_objective_coefficient(upper.model,lower.model.obj_dict[key][index],control[key][index])
 				end
 			end
 		end
@@ -165,21 +165,23 @@ function evaluate(upper::Upperbound,point)
 	if !isempty(random)
 		for key in keys(random)
 			if (typeof(random[key]) <: Number)
-				JuMP.set_objective_coefficient(lower.model.obj_dict[key],random[key])
+				JuMP.set_objective_coefficient(upper.model.obj_dict[key],random[key])
 			else
 				for (index,value) in enumerate(random[key])
-					JuMP.set_objective_coefficient(lower.model.obj_dict[key][index],random[key][index])
+					JuMP.set_objective_coefficient(upper.model.obj_dict[key][index],random[key][index])
 				end
 			end
 		end
 	end
 
 	obj = NaN
-	optimize!(lower.model)
+	optimize!(upper.model)
 	# if termination_status(lower.model) == 1
 	# need to perform check to see if model got optimized correctly
-	obj = objective_value(lower.model)
+	obj = objective_value(upper.model)
 	# end
+
+	return obj
 
 	##
 	# Doesn't make sense it ``unset'' the variables in the lower bound case
@@ -189,45 +191,71 @@ end
 ####
 # update function
 ####
-function update(lower::Lowerbound,cut)
-	# we need to add a constraint to the optimization problem
-	cut.obj
+function update!(lower::Lowerbound,cut)
+	push!(lower.cuts,cut)
+
 	# build up JuMP to use in the constraint
 	ex = JuMP.AffExpr(0.0)
 
 	if !isempty(control)
-		for key in keys(control)
-			if typeof(control[key]) <: Number
-				JuMP.set_objective_coefficient(lower.model.obj_dict[key],control[key])
+		for key in keys(cut.grad.control)
+			if typeof(cut.grad.control[key]) <: Number
+				JuMP.add_to_expression!(ex,cut.grad.control[key],(lower.model.obj_dict[key] - cut.point.control[key]))
 			else
-				for (index,value) in enumerate(control[key])
-					JuMP.set_objective_coefficient(lower.model,lower.model.obj_dict[key][index],control[key][index])
+				for (index,value) in enumerate(cut.grad.control[key])
+					JuMP.add_to_expression!(ex,cut.grad.control[key][index],(lower.model.obj_dict[key][index] - cut.point.control[key][index]))
 				end
 			end
 		end
 	end
 
 	if !isempty(random)
-		for key in keys(random)
-			if (typeof(random[key]) <: Number)
-				JuMP.set_objective_coefficient(lower.model.obj_dict[key],random[key])
+		for key in keys(cut.grad.random)
+			if typeof(cut.grad.random[key]) <: Number
+				JuMP.add_to_expression!(ex,cut.grad.random[key],(lower.model.obj_dict[key] - cut.point.random[key]))
 			else
-				for (index,value) in enumerate(random[key])
-					JuMP.set_objective_coefficient(lower.model.obj_dict[key][index],random[key][index])
+				for (index,value) in enumerate(cut.grad.random[key])
+					JuMP.add_to_expression!(ex,cut.grad.random[key][index],(lower.model.obj_dict[key][index] - cut.point.random[key][index]))
 				end
 			end
 		end
 	end
 
-
-	@constraint(lower.model,cut.obj)
+	return @constraint(lower.model,model.obj[:epi] >= cut.value +  ex)
 end
 
-function update(upper::Upperbound,cut)
+function update!(upper::Upperbound,cut)
+	# push the cut to the list of cuts
+	push!(upper.cuts,cut)
+	# build up JuMP to use in the constraint
+	ex = JuMP.AffExpr(0.0)
 
+	if !isempty(control)
+		for key in keys(cut.grad.control)
+			if typeof(cut.grad.control[key]) <: Number
+				JuMP.add_to_expression!(ex,cut.grad.point[key],upper.obj_dict[key])
+			else
+				for (index,value) in enumerate(cut.grad.control[key])
+					JuMP.add_to_expression!(ex,cut.grad.control[key][index],upper.obj_dict[key][index])
+				end
+			end
+		end
+	end
+
+	if !isempty(random)
+		for key in keys(cut.grad.random)
+			if typeof(cut.grad.random[key]) <: Number
+				JuMP.add_to_expression!(ex,cut.grad.random[key],upper.model.obj_dict[key])
+			else
+				for (index,value) in enumerate(cut.grad.random[key])
+					JuMP.add_to_expression!(ex,cut.grad.random[key][index],upper.model.obj_dict[key][index])
+				end
+			end
+		end
+	end
+
+	return @constraint(lower.model,model.obj[:intercept] + ex  <= cut.value)
 end
-
-
 
 # JuMP hacks
 # i really shouldn't have to write these myself
@@ -249,5 +277,20 @@ function create_jump_variable(model::JuMP.Model,name::Symbol,size)
 	return my_var
 end
 
-function do_for_each(point)
+function create_jump_variable(model::JuMP.Model,name::Symbol,size,bounds)
+	# if a scalar
+	if size == ()
+		# my_var = JuMP.variable_type(model)(JuMP.undef)
+		my_var = JuMP.add_variable(model, JuMP.build_variable(x-> (), JuMP.VariableInfo(false, bounds[1], false, bounds[2], false, NaN, false, NaN, false, false)), JuMP.string(String(name)))
+		(JuMP.object_dictionary(model))[name] = my_var
+		return my_var
+	end
+
+	# my_var = JuMP.Array{JuMP.variable_type(model)}(JuMP.undef, (JuMP.length(Base.OneTo(9)),)...)
+	my_var = JuMP.Array{JuMP.variable_type(model)}(JuMP.undef, size...)
+	for i in CartesianIndices(my_var)
+		my_var[i] = JuMP.add_variable(model, JuMP.build_variable(x-> (), JuMP.VariableInfo(false, bounds[1], false, bounds[2], false, NaN, false, NaN, false, false)), JuMP.string(String(name), "[", string(Tuple(i))  , "]"))
+	end
+	(JuMP.object_dictionary(model))[name] = my_var
+	return my_var
 end
