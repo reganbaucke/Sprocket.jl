@@ -10,12 +10,14 @@ using GLPK #free and open source solver
 abstract type Bound end
 
 struct Lowerbound <: Bound
+	vars
 	model::JuMP.Model
 	cuts::Array
 	queries::Int
 end
 
 struct Upperbound <: Bound
+	vars
 	model::JuMP.Model
 	cuts::Array
 	queries::Int
@@ -25,21 +27,16 @@ end
 ###
 # Constructors
 ###
-function Lowerbound(problem, initial_lower)
+function Lowerbound(vars, initial_lower)
 	# initialise empty model
 	model = JuMP.Model(with_optimizer(GLPK.Optimizer))
 
+
 	## call get the structure of the problem
-	structure = problem[1]()
 
 	## for the control variables, set up the JuMP Variables
-	for key in keys(structure.control)
-		create_jump_variable(model,key,structure.control[key])
-	end
-
-	## for the random variables, set up the JuMP Variables
-	for key in keys(structure.random)
-		create_jump_variable(model,key,structure.random[key])
+	for key in keys(vars)
+		create_jump_variable(model,key,vars[key][2])
 	end
 
 	## add the epigraph variable
@@ -47,24 +44,17 @@ function Lowerbound(problem, initial_lower)
 	@objective(model,Min, epi)
 
 	cuts = []
-	return Lowerbound(model,cuts,0)
+	return Lowerbound(copy(vars),model,cuts,0)
 end
 
-function Upperbound(problem, initial_upper, lipschitz_bound)
+function Upperbound(vars, initial_upper, lipschitz_bound)
 	# initialise empty model
 	model = JuMP.Model(with_optimizer(GLPK.Optimizer))
 
-	## call get the structure of the problem
-	structure = problem[1]()
 
 	## for the control variables, set up the JuMP Variables
-	for key in keys(structure.control)
-		create_jump_variable(model,key,structure.control[key],(-lipschitz_bound,lipschitz_bound))
-	end
-
-	## for the random variables, set up the JuMP Variables
-	for key in keys(structure.random)
-		create_jump_variable(model,key,structure.random[key],(-lipschitz_bound,lipschitz_bound))
+	for key in keys(vars)
+		create_jump_variable(model,key,vars[key][2],(-lipschitz_bound,lipschitz_bound))
 	end
 
 	## add the intercept variable
@@ -73,41 +63,26 @@ function Upperbound(problem, initial_upper, lipschitz_bound)
 
 	cuts=[]
 
-	return Upperbound(model,cuts,0)
+	return Upperbound(copy(vars),model,cuts,0)
 end
 
 ###
 # Evaluate function
 ###
-# point is a tuple of dictionary of symbols to arrays of floats
-function evaluate(lower::Lowerbound,point::Point)
+function evaluate(lower::Lowerbound,vars)
 	# our goal is to set the variables in the model of lower to the values in point and
 	# then solve the model
 
-	# for code readability
-	control = point.control
-	random = point.random
+	# check that we are sending in the right points
+	@assert(keys(vars)==keys(lower.vars))
 
-	if !isempty(control)
-		for key in keys(control)
-			if typeof(control[key]) <: Number
-				JuMP.fix(lower.model.obj_dict[key],control[key])
-			else
-				for (index,value) in enumerate(control[key])
-					JuMP.fix(lower.model.obj_dict[key][index],control[key][index])
-				end
-			end
-		end
-	end
 
-	if !isempty(random)
-		for key in keys(random)
-			if !(typeof(random[key]) <: AbstractArray)
-				JuMP.fix(lower.model.obj_dict[key],random[key])
-			else
-				for (index,value) in enumerate(random[key])
-					JuMP.fix(lower.model.obj_dict[key][index],random[key][index])
-				end
+	for key in keys(vars)
+		if typeof(vars[key][2]) <: Number
+			JuMP.fix(lower.model.obj_dict[key],vars[key][2])
+		else
+			for (index,value) in enumerate(vars[key][2])
+				JuMP.fix(lower.model.obj_dict[key][index],value)
 			end
 		end
 	end
@@ -119,22 +94,12 @@ function evaluate(lower::Lowerbound,point::Point)
 	obj = objective_value(lower.model)
 	# end
 
-	for key in keys(control)
-		if typeof(control[key]) <: Number
+	for key in keys(vars)
+		if typeof(vars[key][2]) <: Number
 			JuMP.unfix(lower.model.obj_dict[key])
 		else
-			for (index,value) in enumerate(control[key])
-				JuMP.unfix(lower.model.obj_dict[key][index])
-			end
-		end
-	end
-
-	for key in keys(random)
-		if typeof(random[key]) <: Number
-			JuMP.unfix(lower.model.obj_dict[key])
-		else
-			for (index,value) in enumerate(random[key])
-				JuMP.unfix(lower.model.obj_dict[key][index])
+			for (index,value) in enumerate(vars[key][2])
+				JuMP.unfix(lower.model.obj_dict[key][2][index])
 			end
 		end
 	end
@@ -142,34 +107,19 @@ function evaluate(lower::Lowerbound,point::Point)
 	return obj
 end
 
-function evaluate(upper::Upperbound,point::Point)
+function evaluate(upper::Upperbound,vars)
 	# for code readability
-	control = point.control
-	random = point.random
+	@assert(keys(vars)==keys(upper.vars))
 
 	# we have to go through and reset the object coefficents for all the variables
 	# use JuMP.set_objective_coefficient
 
-	if !isempty(control)
-		for key in keys(control)
-			if typeof(control[key]) <: Number
-				JuMP.set_objective_coefficient(upper.model,upper.model.obj_dict[key],control[key])
-			else
-				for (index,value) in enumerate(control[key])
-					JuMP.set_objective_coefficient(upper.model,lower.model.obj_dict[key][index],control[key][index])
-				end
-			end
-		end
-	end
-
-	if !isempty(random)
-		for key in keys(random)
-			if (typeof(random[key]) <: Number)
-				JuMP.set_objective_coefficient(upper.model,upper.model.obj_dict[key],random[key])
-			else
-				for (index,value) in enumerate(random[key])
-					JuMP.set_objective_coefficient(upper.model,upper.model.obj_dict[key][index],random[key][index])
-				end
+	for key in keys(vars)
+		if typeof(vars[key][2]) <: Number
+			JuMP.set_objective_coefficient(upper.model,upper.model.obj_dict[key],vars[key][2])
+		else
+			for (index,value) in enumerate(vars[key][2])
+				JuMP.set_objective_coefficient(upper.model,upper.model.obj_dict[key][index],vars[key][2][index])
 			end
 		end
 	end
@@ -198,26 +148,14 @@ function update!(lower::Lowerbound,cut)
 	# build up JuMP to use in the constraint
 	ex = JuMP.AffExpr(0.0)
 
-	if !isempty(cut.grad.control)
-		for key in keys(cut.grad.control)
-			if typeof(cut.grad.control[key]) <: Number
-				JuMP.add_to_expression!(ex,cut.grad.control[key],(lower.model.obj_dict[key] - cut.point.control[key]))
-			else
-				for (index,value) in enumerate(cut.grad.control[key])
-					JuMP.add_to_expression!(ex,cut.grad.control[key][index],(lower.model.obj_dict[key][index] - cut.point.control[key][index]))
-				end
-			end
-		end
-	end
+	@assert(keys(cut.point) == keys(lower.vars))
 
-	if !isempty(cut.grad.random)
-		for key in keys(cut.grad.random)
-			if typeof(cut.grad.random[key]) <: Number
-				JuMP.add_to_expression!(ex,cut.grad.random[key],(lower.model.obj_dict[key] - cut.point.random[key]))
-			else
-				for (index,value) in enumerate(cut.grad.random[key])
-					JuMP.add_to_expression!(ex,cut.grad.random[key][index],(lower.model.obj_dict[key][index] - cut.point.random[key][index]))
-				end
+	for key in keys(lower.vars)
+		if typeof(cut.point[key][2]) <: Number
+			JuMP.add_to_expression!(ex,cut.grad[key][2]*(lower.model.obj_dict[key] - cut.point[key][2]))
+		else
+			for (index,value) in enumerate(cut.point[key][2])
+				JuMP.add_to_expression!(ex,cut.grad[key][2][index]*(lower.model.obj_dict[key][index] - cut.point[key][2][index]))
 			end
 		end
 	end
@@ -229,29 +167,17 @@ function update!(upper::Upperbound,cut)
 	# push the cut to the list of cuts
 	push!(upper.cuts,cut)
 
+	@assert(keys(cut.point)==keys(upper.vars))
+
 	# build up JuMP to use in the constraint
 	ex = JuMP.AffExpr(0.0)
 
-	if !isempty(cut.grad.control)
-		for key in keys(cut.grad.control)
-			if typeof(cut.grad.control[key]) <: Number
-				JuMP.add_to_expression!(ex,cut.grad.point[key],upper.obj_dict[key])
-			else
-				for (index,value) in enumerate(cut.grad.control[key])
-					JuMP.add_to_expression!(ex,cut.grad.control[key][index],upper.obj_dict[key][index])
-				end
-			end
-		end
-	end
-
-	if !isempty(cut.grad.random)
-		for key in keys(cut.grad.random)
-			if typeof(cut.grad.random[key]) <: Number
-				JuMP.add_to_expression!(ex,cut.point.random[key],upper.model.obj_dict[key])
-			else
-				for (index,value) in enumerate(cut.point.random[key])
-					JuMP.add_to_expression!(ex,cut.point.random[key][index],upper.model.obj_dict[key][index])
-				end
+	for key in keys(upper.vars)
+		if typeof(cut.point[key][2]) <: Number
+			JuMP.add_to_expression!(ex,cut.point[key][2],upper.model.obj_dict[key])
+		else
+			for (index,value) in enumerate(cut.point[key][2])
+				JuMP.add_to_expression!(ex,cut.point[key][2][index],upper.model.obj_dict[key][index])
 			end
 		end
 	end
