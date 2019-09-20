@@ -31,14 +31,13 @@ function build_type(point)
 end
 
 function build_c_oracle()
-	function zero_order(point)
-		return point.random[:xi]^2
+	function zero_order(vars)
+		return vars[:xi][2]^2
 	end
-	function first_order(point)
-		fresh_control = copy(point.control)
-		fresh_random = copy(point.random)
-		fresh_random[:xi] = 2*point.random[:xi]
-		return Point(fresh_control,fresh_random)
+	function first_order(vars)
+		grad = Dict()
+		grad[:xi] = (vars[:xi][1], 2*vars[:xi][2])
+		return grad
 	end
 	return (zero_order,first_order)
 end
@@ -85,14 +84,26 @@ end
 
 # make a problem
 my_prob = build_problem(build_point())
+
+
+vars = Dict()
+
+vars[:xi] = (:random,())
+
 # make a lowerbound
-my_lower = Lowerbound(my_prob,-999.9)
-my_upper = Upperbound(my_prob,999.9,10)
+my_lower = Lowerbound(vars,-999.9)
+my_upper = Upperbound(vars,999.9,10)
 
-evaluate(my_lower,origin(my_prob))
-evaluate(my_upper,origin(my_prob))
+origin = Dict()
+origin[:xi] = (:random, 0.0)
 
-my_cut = generate_cut(my_prob[2],unit(my_prob))
+unit = Dict()
+unit[:xi] = (:random, 1.0)
+
+evaluate(my_lower,origin)
+evaluate(my_upper,origin)
+
+my_cut = generate_cut(build_c_oracle(),unit)
 
 update!(my_lower,my_cut)
 update!(my_upper,my_cut)
