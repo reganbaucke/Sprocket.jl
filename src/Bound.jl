@@ -11,6 +11,7 @@ abstract type Bound end
 
 struct Lowerbound <: Bound
 	vars
+	epi::JuMP.VariableRef
 	model::JuMP.Model
 	cuts::Array
 	queries::Int
@@ -40,11 +41,11 @@ function Lowerbound(vars, initial_lower)
 	end
 
 	## add the epigraph variable
-	@variable(model,epi,lower_bound=initial_lower)
+	epi = @variable(model,lower_bound=initial_lower)
 	@objective(model,Min, epi)
 
 	cuts = []
-	return Lowerbound(copy(vars),model,cuts,0)
+	return Lowerbound(copy(vars),epi,model,cuts,0)
 end
 
 function Upperbound(vars, initial_upper, lipschitz_bound)
@@ -78,10 +79,10 @@ function evaluate(lower::Lowerbound,vars)
 
 
 	for key in keys(vars)
-		if typeof(vars[key][2]) <: Number
-			JuMP.fix(lower.model.obj_dict[key],vars[key][2])
+		if typeof(vars[key]) <: Number
+			JuMP.fix(lower.model.obj_dict[key],vars[key])
 		else
-			for (index,value) in enumerate(vars[key][2])
+			for (index,value) in enumerate(vars[key])
 				JuMP.fix(lower.model.obj_dict[key][index],value)
 			end
 		end
@@ -95,11 +96,11 @@ function evaluate(lower::Lowerbound,vars)
 	# end
 
 	for key in keys(vars)
-		if typeof(vars[key][2]) <: Number
+		if typeof(vars[key]) <: Number
 			JuMP.unfix(lower.model.obj_dict[key])
 		else
-			for (index,value) in enumerate(vars[key][2])
-				JuMP.unfix(lower.model.obj_dict[key][2][index])
+			for (index,value) in enumerate(vars[key])
+				JuMP.unfix(lower.model.obj_dict[key][index])
 			end
 		end
 	end
@@ -115,11 +116,11 @@ function evaluate(upper::Upperbound,vars)
 	# use JuMP.set_objective_coefficient
 
 	for key in keys(vars)
-		if typeof(vars[key][2]) <: Number
-			JuMP.set_objective_coefficient(upper.model,upper.model.obj_dict[key],vars[key][2])
+		if typeof(vars[key]) <: Number
+			JuMP.set_objective_coefficient(upper.model,upper.model.obj_dict[key],vars[key])
 		else
-			for (index,value) in enumerate(vars[key][2])
-				JuMP.set_objective_coefficient(upper.model,upper.model.obj_dict[key][index],vars[key][2][index])
+			for (index,value) in enumerate(vars[key])
+				JuMP.set_objective_coefficient(upper.model,upper.model.obj_dict[key][index],vars[key][index])
 			end
 		end
 	end
@@ -151,16 +152,16 @@ function update!(lower::Lowerbound,cut)
 	@assert(keys(cut.point) == keys(lower.vars))
 
 	for key in keys(lower.vars)
-		if typeof(cut.point[key][2]) <: Number
-			JuMP.add_to_expression!(ex,cut.grad[key][2]*(lower.model.obj_dict[key] - cut.point[key][2]))
+		if typeof(cut.point[key]) <: Number
+			JuMP.add_to_expression!(ex,cut.grad[key]*(lower.model.obj_dict[key] - cut.point[key]))
 		else
-			for (index,value) in enumerate(cut.point[key][2])
-				JuMP.add_to_expression!(ex,cut.grad[key][2][index]*(lower.model.obj_dict[key][index] - cut.point[key][2][index]))
+			for (index,value) in enumerate(cut.point[key])
+				JuMP.add_to_expression!(ex,cut.grad[key][index]*(lower.model.obj_dict[key][index] - cut.point[key][index]))
 			end
 		end
 	end
 
-	return @constraint(lower.model,lower.model.obj_dict[:epi] >= cut.value +  ex)
+	return @constraint(lower.model,lower.:epi >= cut.value +  ex)
 end
 
 function update!(upper::Upperbound,cut)
@@ -173,11 +174,11 @@ function update!(upper::Upperbound,cut)
 	ex = JuMP.AffExpr(0.0)
 
 	for key in keys(upper.vars)
-		if typeof(cut.point[key][2]) <: Number
-			JuMP.add_to_expression!(ex,cut.point[key][2],upper.model.obj_dict[key])
+		if typeof(cut.point[key]) <: Number
+			JuMP.add_to_expression!(ex,cut.point[key],upper.model.obj_dict[key])
 		else
-			for (index,value) in enumerate(cut.point[key][2])
-				JuMP.add_to_expression!(ex,cut.point[key][2][index],upper.model.obj_dict[key][index])
+			for (index,value) in enumerate(cut.point[key])
+				JuMP.add_to_expression!(ex,cut.point[key][index],upper.model.obj_dict[key][index])
 			end
 		end
 	end
@@ -222,3 +223,8 @@ function create_jump_variable(model::JuMP.Model,name::Symbol,size,bounds)
 	(JuMP.object_dictionary(model))[name] = my_var
 	return my_var
 end
+
+
+# TODO
+# make a new entry in the UPPERBOUND struct that keeps track of the intercept variable, like
+# what is done for the `epi' variable in the LOWERBOUND.
