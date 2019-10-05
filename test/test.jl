@@ -1,28 +1,9 @@
 using Test
 using JuMP
 using GLPK
-using Sprocket
+# using Sprocket
+include("../src/Sprocket.jl")
 
-Base.copy(()) = ()
-
-function build_point()
-	control = ()
-
-	random = Dict()
-
-	# singleton
-	random[:xi] = ()
-
-	# one dimensional array of length 5
-	return Point(control,random)
-end
-
-function build_problem(point::Point)
-	cutting_oracle = build_c_oracle()
-	m_oracle = build_m_oracle()
-	type = build_type(point)
-	return (type,cutting_oracle,m_oracle)
-end
 
 function build_type(point)
 	function type()
@@ -43,7 +24,7 @@ function build_c_oracle()
 end
 
 function build_m_oracle()
-	function zero_order(random_1,random_2)
+	function zero_order(vars_1,vars_2)
 		left = -Inf
 		right = Inf
 		if random_1[:xi] <= 0
@@ -60,19 +41,19 @@ function build_m_oracle()
 		end
 		return right-left
 	end
-	function first_order(random_1,random_2)
+	function first_order(vars_1,vars_2)
 		left = -Inf
 		right = Inf
-		if random_1[:xi] <= 0
+		if random_1[:xi][2] <= 0
 			left = 0
 		end
-		if random_1[:xi] >= 1
+		if random_1[:xi][2] >= 1
 			left = 1
 		end
-		if random_2[:xi] <= 0
+		if random_2[:xi][2] <= 0
 			right = 0
 		end
-		if random_2[:xi] >= 1
+		if random_2[:xi][2] >= 1
 			right = 1
 		end
 		fresh = copy(random_1)
