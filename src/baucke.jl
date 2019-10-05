@@ -29,24 +29,26 @@ function BauckeAlgorithm()
 
 		atom = Baucke.Atom()
 		atom.corner_points = []
+
 		point_1 = Dict()
 		point_1[:xi] = 0.0
 		point_2 = Dict()
 		point_2[:xi] = 1.0
+
 		push!(atom.corner_points,point_1)
 		push!(atom.corner_points,point_2)
 
-		atom.corner_weights = Dict()
-		atom.corner_weights[point_1] = 0.5
-		atom.corner_weights[point_2] = 0.5
+		atom.P = compute_probability(atom,prob.m_oracle)
+		atom.A = compute_average_point(atom,prob.m_oracle)
 
-		atom.A = Dict(:xi => 0.5)
-		atom.P = 1.0
+		compute_weights!(atom)
 
 		push!(atoms,atom)
 
 		lower = Sprocket.Lowerbound(prob.vars,-99)
 		upper = Sprocket.Upperbound(prob.vars,99,10)
+
+		println(atoms)
 		return (lower=lower,upper=upper,atoms=atoms,control=())
 	end
 	function iterate(state,prob)
@@ -73,25 +75,25 @@ function BauckeAlgorithm()
 end
 
 function compute_probability(atom::Baucke.Atom,oracle)
-	return m_oracle[1](get_generating_pair(atom)...)
+	return oracle[1](get_generating_pair(atom)...)
 end
 
 function compute_average_point(atom::Baucke.Atom,oracle)
 	return oracle[2](get_generating_pair(atom)...)/oracle[1](get_generating_pair(atom)...)
 end
 
-function compute_weights(atom::Baucke.Atom)
+function compute_weights!(atom::Baucke.Atom)
 	@assert is_bounded(atom)
 
 	# save the keys in one place so the ordering over dicts with the keys is consistent
 	var_keys = keys(atom.A)
 	# A = zeros(dimension(vars)+1,length(atom.corner_points))
-	A = Array{Float64}(undef,dimension(vars)+1,length(atom.corner_points))
+	A = Array{Float64}(undef,dimension(atom.A)+1,length(atom.corner_points))
 
-	for (point,i) in enumerate(atom.corner_points)
+	for (i,point) in enumerate(atom.corner_points)
 		col = Float64[]
 		for key in var_keys
-			if point[key] <: Number
+			if typeof(point[key]) <: Number
 				push!(col,point[key])
 			else
 				for j in eachindex(point[key])
@@ -106,24 +108,25 @@ function compute_weights(atom::Baucke.Atom)
 
 	b = Float64[]
 	for key in var_keys
-		if point[key] <: Number
+		if typeof(atom.A[key]) <: Number
 			push!(b,atom.A[key])
 		else
 			for j in eachindex(atom.A[key])
-				push!(col,atom.A[key][j])
+				push!(b,atom.A[key][j])
 			end
 		end
 	end
 
 	# push the last entry as the constraint that weights sum to one
-	push!(col,1.0)
+	push!(b,1.0)
 
 	#compute the minimum norm whose solution corresponds to the most even weights
 	weights = transpose(A)*(A*transpose(A)\b)
 
+	atom.corner_weights = Dict{Any,Float64}()
 	# assign weights
 	for i in eachindex(atom.corner_points)
-		atom.compute_weights[atom.corner_points] = weights[i]
+		atom.corner_weights[atom.corner_points[i]] = weights[i]
 	end
 
 	return nothing
