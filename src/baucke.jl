@@ -48,17 +48,23 @@ function BauckeAlgorithm()
 		lower = Sprocket.Lowerbound(prob.vars,-99)
 		upper = Sprocket.Upperbound(prob.vars,99,10)
 
-		println(atoms)
 		return (lower=lower,upper=upper,atoms=atoms,control=())
 	end
 	function iterate(state,prob)
-		println(state.lower)
 
 		biggest_bound = largest_bound_gap(state.atoms,state.control,(state.lower,state.upper))
 		center_point = compute_average_point(biggest_bound,prob.m_oracle)
-		atoms = state.atoms
+		# new_state = deepcopy(state)
+		atoms = copy(state.atoms)
 
-		union!(atoms,split_atom(biggest_bound,center_point))
+		new_atoms = split_atom(biggest_bound,center_point)
+		for atom in new_atoms
+			atom.P = compute_probability(atom,prob.m_oracle)
+			atom.A = compute_average_point(atom,prob.m_oracle)
+			compute_weights!(atom)
+		end
+
+		union!(atoms,new_atoms)
 		delete!(atoms,biggest_bound)
 
 		cut = Sprocket.generate_cut(prob.c_oracle,center_point)
@@ -67,7 +73,8 @@ function BauckeAlgorithm()
 
 		# update_control_problem!(control_problem,cut)
 		# get_new_control(control_problem)
-		return (lower=state.lower,upper=state.upper,atoms=state.atoms,control=())
+		return (lower=state.lower,upper=state.upper,atoms=atoms,control=())
+		# return new_state
 	end
 	function hasmet(crit::Sprocket.Criteria,state)
 	end
@@ -146,10 +153,35 @@ end
 function largest_bound_gap(atoms,control,(lower,upper))
 	atoms = collect(atoms)
 	gap = zeros(size(atoms))
+	upper_val = zeros(size(atoms))
+	lower_val = zeros(size(atoms))
 	for (i,atom) in enumerate(atoms)
+		upper_val[i] = upper_bound(atom,upper,control)
+		lower_val[i] = lower_bound(atom,lower,control)
 		gap[i] = upper_bound(atom,upper,control)-lower_bound(atom,lower,control)
 	end
+
+	println("-----------")
+	println(sum(gap))
+	println("-")
+	println(sum(upper_val))
+	println(sum(lower_val))
+
+	# println(lower.cuts)
+
 	(value,index) = findmax(gap)
+
+	# for (i,atom) in enumerate(atoms)
+	# 	println("--")
+	# 	if index == i
+	# 		println("!!!!!")
+	# 	end
+	# 	println(atoms[i])
+	# 	println(upper_val[i])
+	# 	println(lower_val[i])
+	# 	println("--")
+	# end
+
 	return atoms[index]
 end
 
@@ -179,7 +211,7 @@ function upper_bound(atom,upper,control)
 		sum+= atom.corner_weights[point]*Sprocket.evaluate(upper,point)
 	end
 
-	return sum
+	return sum*atom.P
 end
 
 function get_probability(m_oracle,a::Baucke.Atom)
@@ -379,5 +411,25 @@ function Base.:<(var_1::Dict,var_2::Dict)
 	all(map_over_keys(all,applic_over_vars((x,y) -> all(x .< y ),var_1,var_2)))
 end
 
+function Base.string(atom::Baucke.Atom)
+	out = ""
+	for point in atom.corner_points
+		out *= string(point) * "\n"
+	end
+
+	out*= "probability: $(atom.P) \n"
+	out*= "barycenter: $(atom.A)"
+end
+
+function Base.show(io::IO,atom::Baucke.Atom)
+	out = ""
+	for point in atom.corner_points
+		out *= string(point) * "\n"
+	end
+
+	out*= "probability: $(atom.P) \n"
+	out*= "barycenter: $(atom.A)"
+	println(io,out)
+end
+
 # TODO
-# add the corner weights function

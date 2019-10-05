@@ -16,11 +16,13 @@ function build_problem()
 	# objective function is defined through the cutting plane oracle
 	function my_cutting_plane_oracle()
 		function zero_order(vars)
-			return vars[:xi]^2
+			return vars[:xi]^4
+			# return 0
 		end
 		function first_order(vars)
 			grad = Dict()
-			grad[:xi] = 2*vars[:xi]
+			grad[:xi] = 4*vars[:xi]^3
+			# grad[:xi] = 0
 			return grad
 		end
 		return (zero_order,first_order)

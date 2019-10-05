@@ -23,7 +23,9 @@ function Sprocket.solve(algorithm,prob,crit)
 	states = []
 	push!(states,init(prob))
 	# while !check(crit,states[end])
+	for i = 1:30
 		push!(states,iterate(states[end],prob))
+	end
 	# end
 	return states
 end
