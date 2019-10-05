@@ -18,6 +18,7 @@ struct Criteria
 	c_calls::Int64
 end
 
+### Constructor with defaults
 function Criteria(;abstol::Float64=0.0,
 	 			   reltol::Float64=0.0,
 				   time::Float64=Inf,
