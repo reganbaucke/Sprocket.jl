@@ -18,7 +18,7 @@ function unit(problem)
 		end
 	end
 
-	return map_over_keys(new_ones,problem[1]())
+	return map_over_keys(new_ones,problem.vars)
 end
 
 # returns the unit point for a given variable
