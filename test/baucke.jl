@@ -29,8 +29,8 @@ function build_problem()
 	# distribution of random variables is defined through the measure oracle
 	function my_measure_oracle()
 		function zero_order(vars_1,vars_2)
-			left = -Inf
-			right = Inf
+			left = vars_1[:xi]
+			right = vars_2[:xi]
 			if vars_1[:xi] <= 0
 				left = 0
 			end
@@ -46,8 +46,8 @@ function build_problem()
 			return right-left
 		end
 		function first_order(vars_1,vars_2)
-			left = -Inf
-			right = Inf
+			left = vars_1[:xi]
+			right = vars_2[:xi]
 			if vars_1[:xi] <= 0
 				left = 0
 			end
