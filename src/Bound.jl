@@ -11,7 +11,7 @@ abstract type Bound end
 
 struct Lowerbound <: Bound
 	vars
-	epi::JuMP.VariableRef
+	# epi::JuMP.VariableRef
 	model::JuMP.Model
 	cuts::Array
 	queries::Int
@@ -41,11 +41,11 @@ function Lowerbound(vars, initial_lower)
 	end
 
 	## add the epigraph variable
-	epi = @variable(model,lower_bound=initial_lower)
+	@variable(model,epi >=initial_lower)
 	@objective(model,Min, epi)
 
 	cuts = []
-	return Lowerbound(copy(vars),epi,model,cuts,0)
+	return Lowerbound(copy(vars),model,cuts,0)
 end
 
 function Upperbound(vars, initial_upper, lipschitz_bound)
@@ -161,7 +161,7 @@ function update!(lower::Lowerbound,cut)
 		end
 	end
 
-	return @constraint(lower.model,lower.:epi >= cut.value +  ex)
+	return @constraint(lower.model,lower.model.obj_dict[:epi] >= cut.value + ex)
 end
 
 function update!(upper::Upperbound,cut)
