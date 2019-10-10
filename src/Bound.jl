@@ -10,15 +10,16 @@ using GLPK #free and open source solver
 abstract type Bound end
 
 struct Lowerbound <: Bound
-	vars
-	# epi::JuMP.VariableRef
+	vars::Point
+	epi::JuMP.VariableRef
 	model::JuMP.Model
 	cuts::Array
 	queries::Int
 end
 
 struct Upperbound <: Bound
-	vars
+	vars::Point
+	epi::JuMP.VariableRef
 	model::JuMP.Model
 	cuts::Array
 	queries::Int
@@ -28,65 +29,71 @@ end
 ###
 # Constructors
 ###
-function Lowerbound(vars, initial_lower)
+function Lowerbound(vars::Set{Variable}, initial_lower::Float64)
 	# initialise empty model
 	model = JuMP.Model(with_optimizer(GLPK.Optimizer))
 
+	point=Dict{Variable,Union{JuMP.VariableRef,Array{JuMP.VariableRef}}}()
 
-	## call get the structure of the problem
-
-	## for the control variables, set up the JuMP Variables
-	for key in keys(vars)
-		create_jump_variable(model,key,vars[key][2])
+	for var in vars
+		point[var] = create_jump_variable(model,var.name,var.size)
 	end
 
 	## add the epigraph variable
-	@variable(model,epi >=initial_lower)
+	epi = @variable(model,lower_bound=initial_lower)
 	@objective(model,Min, epi)
 
-	cuts = []
-	return Lowerbound(copy(vars),model,cuts,0)
+	cuts = Cut[]
+	return Lowerbound(Point(point),epi,model,cuts,0)
 end
 
-function Upperbound(vars, initial_upper, lipschitz_bound)
+Lowerbound(var::Variable, initial_lower::Float64) = Lowerbound(Set{Variable}([var]),initial_lower)
+
+function Upperbound(vars::Set{Variable}, initial_upper, lipschitz_bound)
 	# initialise empty model
 	model = JuMP.Model(with_optimizer(GLPK.Optimizer))
 
+	point=Dict{Variable,Union{JuMP.VariableRef,Array{JuMP.VariableRef}}}()
 
 	## for the control variables, set up the JuMP Variables
-	for key in keys(vars)
-		create_jump_variable(model,key,vars[key][2],(-lipschitz_bound,lipschitz_bound))
+	for var in vars
+		point[var] = create_jump_variable(model,var.name,var.size, (-lipschitz_bound,lipschitz_bound))
 	end
 
 	## add the intercept variable
-	@variable(model,intercept,upper_bound=initial_upper)
-	@objective(model,Max, intercept)
+	epi = @variable(model,upper_bound=initial_upper)
+	@objective(model,Max, epi)
 
-	cuts=[]
+	cuts=Cut[]
 
-	return Upperbound(copy(vars),model,cuts,0)
+	return Upperbound(Point(point),epi,model,cuts,0)
 end
+
+Upperbound(var::Variable, initial_upper::Float64,lipschitz_bound) = Upperbound(Set{Variable}([var]),initial_upper,lipschitz_bound)
 
 ###
 # Evaluate function
 ###
-function evaluate(lower::Lowerbound,vars)
+function evaluate(lower::Lowerbound,point::Point)
 	# our goal is to set the variables in the model of lower to the values in point and
 	# then solve the model
 
 	# check that we are sending in the right points
-	@assert(keys(vars)==keys(lower.vars))
+	@assert(get_vars(point)==(get_vars(lower.vars)))
 
-
-	for key in keys(vars)
-		if typeof(vars[key]) <: Number
-			JuMP.fix(lower.model.obj_dict[key],vars[key])
-		else
-			for (index,value) in enumerate(vars[key])
-				JuMP.fix(lower.model.obj_dict[key][index],value)
-			end
-		end
+	for i in eachindex(point)
+		JuMP.fix(lower.vars[i],point[i])
 	end
+
+	# for key in keys(vars)
+	# 	if typeof(vars[key]) <: Number
+	# 		JuMP.fix(lower.model.obj_dict[key],vars[key])
+	# 	else
+	# 		for (index,value) in enumerate(vars[key])
+	# 			JuMP.fix(lower.model.obj_dict[key][index],value)
+	# 		end
+	# 	end
+	# end
 
 	obj = NaN
 	optimize!(lower.model)
@@ -95,34 +102,42 @@ function evaluate(lower::Lowerbound,vars)
 	obj = objective_value(lower.model)
 	# end
 
-	for key in keys(vars)
-		if typeof(vars[key]) <: Number
-			JuMP.unfix(lower.model.obj_dict[key])
-		else
-			for (index,value) in enumerate(vars[key])
-				JuMP.unfix(lower.model.obj_dict[key][index])
-			end
-		end
+	for i in eachindex(point)
+		JuMP.unfix(lower.vars[i])
 	end
+
+	# for key in keys(vars)
+	# 	if typeof(vars[key]) <: Number
+	# 		JuMP.unfix(lower.model.obj_dict[key])
+	# 	else
+	# 		for (index,value) in enumerate(vars[key])
+	# 			JuMP.unfix(lower.model.obj_dict[key][index])
+	# 		end
+	# 	end
+	# end
 
 	return obj
 end
 
-function evaluate(upper::Upperbound,vars)
+function evaluate(upper::Upperbound,point::Point)
 	# for code readability
-	@assert(keys(vars)==keys(upper.vars))
+	@assert(get_vars(point)==(get_vars(upper.vars)))
 
 	# we have to go through and reset the object coefficents for all the variables
 	# use JuMP.set_objective_coefficient
 
-	for key in keys(vars)
-		if typeof(vars[key]) <: Number
-			JuMP.set_objective_coefficient(upper.model,upper.model.obj_dict[key],vars[key])
-		else
-			for (index,value) in enumerate(vars[key])
-				JuMP.set_objective_coefficient(upper.model,upper.model.obj_dict[key][index],vars[key][index])
-			end
-		end
+	# for key in keys(vars)
+	# 	if typeof(vars[key]) <: Number
+	# 		JuMP.set_objective_coefficient(upper.model,upper.model.obj_dict[key],vars[key])
+	# 	else
+	# 		for (index,value) in enumerate(vars[key])
+	# 			JuMP.set_objective_coefficient(upper.model,upper.model.obj_dict[key][index],vars[key][index])
+	# 		end
+	# 	end
+	# end
+
+	for i in eachindex(point)
+		JuMP.set_objective_coefficient(upper.model,upper.vars[i],point[i])
 	end
 
 	obj = NaN
@@ -142,48 +157,81 @@ end
 ####
 # update functions
 ####
-function update!(lower::Lowerbound,cut)
+function update!(lower::Lowerbound,cut::Cut)
 	# push the cut to the list of cuts
 	push!(lower.cuts,cut)
 
 	# build up JuMP to use in the constraint
 	ex = JuMP.AffExpr(0.0)
 
-	@assert(keys(cut.point) == keys(lower.vars))
+	@assert(get_vars(cut.point) == get_vars(lower.vars))
 
-	for key in keys(lower.vars)
-		if typeof(cut.point[key]) <: Number
-			JuMP.add_to_expression!(ex,cut.grad[key]*(lower.model.obj_dict[key] - cut.point[key]))
-		else
-			for (index,value) in enumerate(cut.point[key])
-				JuMP.add_to_expression!(ex,cut.grad[key][index]*(lower.model.obj_dict[key][index] - cut.point[key][index]))
-			end
-		end
+	for i in eachindex(lower.vars)
+		JuMP.add_to_expression!(ex,cut.grad[i]*(lower.vars[i] - cut.point[i]))
 	end
 
-	return @constraint(lower.model,lower.model.obj_dict[:epi] >= cut.value + ex)
+	return @constraint(lower.model,lower.epi >= cut.value + ex)
 end
 
-function update!(upper::Upperbound,cut)
+# function update!(lower::Lowerbound,cut::Cut)
+# 	# push the cut to the list of cuts
+# 	push!(lower.cuts,cut)
+#
+# 	# build up JuMP to use in the constraint
+# 	ex = JuMP.AffExpr(0.0)
+#
+# 	@assert(keys(cut.point) == keys(lower.vars))
+#
+# 	for key in keys(lower.vars)
+# 		if typeof(cut.point[key]) <: Number
+# 			JuMP.add_to_expression!(ex,cut.grad[key]*(lower.model.obj_dict[key] - cut.point[key]))
+# 		else
+# 			for (index,value) in enumerate(cut.point[key])
+# 				JuMP.add_to_expression!(ex,cut.grad[key][index]*(lower.model.obj_dict[key][index] - cut.point[key][index]))
+# 			end
+# 		end
+# 	end
+#
+# 	return @constraint(lower.model,lower.model.obj_dict[:epi] >= cut.value + ex)
+# end
+
+# function update!(upper::Upperbound,cut)
+# 	# push the cut to the list of cuts
+# 	push!(upper.cuts,cut)
+#
+# 	@assert(keys(cut.point)==keys(upper.vars))
+#
+# 	# build up JuMP to use in the constraint
+# 	ex = JuMP.AffExpr(0.0)
+#
+# 	for key in keys(upper.vars)
+# 		if typeof(cut.point[key]) <: Number
+# 			JuMP.add_to_expression!(ex,cut.point[key],upper.model.obj_dict[key])
+# 		else
+# 			for (index,value) in enumerate(cut.point[key])
+# 				JuMP.add_to_expression!(ex,cut.point[key][index],upper.model.obj_dict[key][index])
+# 			end
+# 		end
+# 	end
+#
+# 	return @constraint(upper.model,upper.model.obj_dict[:intercept] + ex  <= cut.value)
+# end
+
+function update!(upper::Upperbound,cut::Cut)
 	# push the cut to the list of cuts
 	push!(upper.cuts,cut)
 
-	@assert(keys(cut.point)==keys(upper.vars))
+	# @assert(keys(cut.point)==keys(upper.vars))
+	@assert(get_vars(cut.point) == get_vars(upper.vars))
 
 	# build up JuMP to use in the constraint
 	ex = JuMP.AffExpr(0.0)
 
-	for key in keys(upper.vars)
-		if typeof(cut.point[key]) <: Number
-			JuMP.add_to_expression!(ex,cut.point[key],upper.model.obj_dict[key])
-		else
-			for (index,value) in enumerate(cut.point[key])
-				JuMP.add_to_expression!(ex,cut.point[key][index],upper.model.obj_dict[key][index])
-			end
-		end
+	for i in eachindex(upper.vars)
+		JuMP.add_to_expression!(ex,cut.point[i],upper.vars[i])
 	end
 
-	return @constraint(upper.model,upper.model.obj_dict[:intercept] + ex  <= cut.value)
+	return @constraint(upper.model,upper.epi + ex  <= cut.value)
 end
 
 # JuMP hacks
@@ -223,8 +271,3 @@ function create_jump_variable(model::JuMP.Model,name::Symbol,size,bounds)
 	(JuMP.object_dictionary(model))[name] = my_var
 	return my_var
 end
-
-
-# TODO
-# make a new entry in the UPPERBOUND struct that keeps track of the intercept variable, like
-# what is done for the `epi' variable in the LOWERBOUND.
