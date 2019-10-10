@@ -1,5 +1,6 @@
 module Sprocket
 # include("./Point.jl")
+include("./Variable.jl")
 include("./Cut.jl")
 include("./Problem.jl")
 include("./Bound.jl")
