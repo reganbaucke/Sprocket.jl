@@ -1,12 +1,12 @@
 struct Cut
-	point
+	point::Point
 	value::Number
-	grad
+	grad::Point
 end
 
-function generate_cut(c_oracle,vars)
+function generate_cut(c_oracle,point::Point)
 	(zero,first) = c_oracle
-	val = zero(vars)
-	grad = first(vars)
-	return Cut(vars,val,grad)
+	val = zero(point)
+	grad = first(point)
+	return Cut(point,val,grad)
 end
