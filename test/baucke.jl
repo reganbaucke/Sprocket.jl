@@ -8,9 +8,11 @@ function build_problem()
 	problem = Sprocket.Problem()
 
 	# add one real valued random variable to the problem
-	@variable(problem.model, xi)
-    problem.vars[:xi] = (:random,size(xi))
-    delete(problem.model,xi)
+	xi = Sprocket.Variable(:xi,(),Sprocket.Random())
+	Sprocket.add_variable(problem,xi)
+
+	# @variable(problem.model, xi)
+    # delete(problem.model,xi)
     ###
 
 	# objective function is defined through the cutting plane oracle
@@ -20,9 +22,8 @@ function build_problem()
 			# return 0
 		end
 		function first_order(vars)
-			grad = Dict()
+			grad = deepcopy(vars)
 			grad[:xi] = 4*vars[:xi]^3
-			# grad[:xi] = 0
 			return grad
 		end
 		return (zero_order,first_order)
@@ -62,7 +63,7 @@ function build_problem()
 			if vars_2[:xi] >= 1
 				right = 1
 			end
-			fresh = copy(vars_1)
+			fresh = deepcopy(vars_1)
 			fresh[:xi] = (right^2 - left^2)/2
 			return fresh
 		end
