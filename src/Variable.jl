@@ -67,6 +67,22 @@ function Base.getindex(my_point::Point,i)
 	# return my_point.var_dict[my_var]
 end
 
+function Base.setindex!(my_point::Point,data,i)
+	if typeof(i) == Symbol
+		my_point.var_dict[Set(collect(keys(my_point.var_dict)))[i]] = data
+		return nothing
+	end
+	if length(i) == 1
+		my_point.var_dict[Set(collect(keys(my_point.var_dict)))[i[1]]] = data
+		return nothing
+	end
+	if length(i) == 2
+		my_point.var_dict[Set(collect(keys(my_point.var_dict)))[i[1]]][i[2]] = data
+		return nothing
+	end
+	# return my_point.var_dict[my_var]
+end
+
 function Base.getindex(vars::Set{Variable},i)
 	# @assert length(i) == 1
 	return filter(x-> x.name==i,collect(vars))[1]
@@ -152,6 +168,19 @@ function Base.:*(point_1::Point,point_2::Point)
 		out.var_dict[var] = copy(point_2.var_dict[var])
 	end
 	return out
+end
+
+function Base.:*(var_1::Variable,var_2::Variable)
+	return Set([var_1,var_2])
+end
+
+function Base.:*(var_1::Set{Variable},var_2::Variable)
+	return union(var_1,var_2)
+end
+
+function Base.:*(var_1::Variable,var_2::Set{Variable})
+	# check that none of the keys are the same
+	return union(var_2,var_1)
 end
 
 function Base.:+(point_1::Point,point_2::Point)
