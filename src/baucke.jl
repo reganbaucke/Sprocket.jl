@@ -3,10 +3,9 @@
 ####
 
 using Combinatorics
+# include("./Sprocket.jl")
 
 module Baucke
-# using Sprocket
-include("./Sprocket.jl")
 
 #structs for use in BauckeAlgorithm
 mutable struct Atom
@@ -30,23 +29,24 @@ function BauckeAlgorithm()
 		atom = Baucke.Atom()
 		atom.corner_points = []
 
-		point_1 = Dict()
-		point_1[:xi] = 0.0
-		point_2 = Dict()
-		point_2[:xi] = 1.0
+		point_1 = Sprocket.Point(Dict(prob.vars[:xi] => 0.0))
+		point_2 = Sprocket.Point(Dict(prob.vars[:xi] => 1.0))
 
 		push!(atom.corner_points,point_1)
 		push!(atom.corner_points,point_2)
+
 
 		atom.P = compute_probability(atom,prob.m_oracle)
 		atom.A = compute_average_point(atom,prob.m_oracle)
 
 		compute_weights!(atom)
 
+		println(atom)
+
 		push!(atoms,atom)
 
-		lower = Sprocket.Lowerbound(prob.vars,-99)
-		upper = Sprocket.Upperbound(prob.vars,99,10)
+		lower = Sprocket.Lowerbound(prob.vars,-99.0)
+		upper = Sprocket.Upperbound(prob.vars,99.0,10.0)
 
 		return (lower=lower,upper=upper,atoms=atoms,control=())
 	end
@@ -92,21 +92,16 @@ end
 function compute_weights!(atom::Baucke.Atom)
 	@assert is_bounded(atom)
 
-	# save the keys in one place so the ordering over dicts with the keys is consistent
-	var_keys = keys(atom.A)
 	# A = zeros(dimension(vars)+1,length(atom.corner_points))
 	A = Array{Float64}(undef,dimension(atom.A)+1,length(atom.corner_points))
 
+	# save the indices in one place so the ordering over dicts with the keys is consistent
+	indices = eachindex(atom.A)
+
 	for (i,point) in enumerate(atom.corner_points)
 		col = Float64[]
-		for key in var_keys
-			if typeof(point[key]) <: Number
-				push!(col,point[key])
-			else
-				for j in eachindex(point[key])
-					push!(col,point[key][j])
-				end
-			end
+		for i in indices
+			push!(col,point[i])
 		end
 		# push the last entry as the constraint that weights sum to one
 		push!(col,1.0)
@@ -114,16 +109,9 @@ function compute_weights!(atom::Baucke.Atom)
 	end
 
 	b = Float64[]
-	for key in var_keys
-		if typeof(atom.A[key]) <: Number
-			push!(b,atom.A[key])
-		else
-			for j in eachindex(atom.A[key])
-				push!(b,atom.A[key][j])
-			end
-		end
+	for i in indices
+		push!(b,atom.A[i])
 	end
-
 	# push the last entry as the constraint that weights sum to one
 	push!(b,1.0)
 
@@ -191,7 +179,7 @@ end
 
 function is_bounded(atom::Baucke.Atom)
 	for point in atom.corner_points
-		if !all(map_over_vars(x-> x!=Inf || x!=-Inf,point))
+		if !all(map(x-> x!=Inf || x!=-Inf,point))
 			return false
 		end
 	end
@@ -229,106 +217,13 @@ function get_average_point(m_oracle,a::Baucke.Atom)
 	return first(get_generating_pair(a...))
 end
 
-function compute_lower_bound(lower,atom,vars)
-
-end
-
-function compute_upper_bound(lower,atom,vars)
-
-end
-
-function compute_bound_gap(lower,atom,vars)
-
-end
-
 function get_generating_pair(a::Baucke.Atom)
 	temp = sort(a.corner_points)
 	return (temp[1],temp[end])
 end
 
 
-function map_over_vars(f,vars)
-	output = Dict()
-
-	for key in keys(vars)
-		output[key] = map(f,vars[key])
-	end
-
-	return output
-end
-
-
-###
-# This should be a symmetric function
-###
-function applic_over_vars(f,var_1,var_2)
-	output = Dict()
-
-	for key in keys(var_1)
-		output[key] = f.(var_1[key],var_2[key])
-	end
-
-	return output
-end
-
-function fold_over_vars(f,init,var)
-	output = copy(init)
-
-	for key in keys(var)
-		if !(typeof(var[key]) <: AbstractArray)
-			output = f(output,var[key])
-		else
-			for element in var[key]
-				output = f(output,element)
-			end
-		end
-	end
-
-	return output
-end
-
-function map_over_keys(f,vars)
-	output = Dict()
-
-	for key in keys(vars)
-		output[key] = f(vars[key])
-	end
-
-	return output
-end
-
-# define scalar multiplication
-function Base.:*(scalar::Real,vars::Dict)
-	function curried_multiply(arg)
-		return scalar*arg
-	end
-	return map_over_vars(curried_multiply, vars)
-end
-
-
-
-## symmetry
-function Base.:*(vars::Dict,scalar::Real)
-	Base.:*(scalar,vars)
-end
-
-## define scalar divide
-function Base.:/(vars::Dict,scalar::Real)
-	return (1/scalar)*vars
-end
-
-## define addition of points
-function Base.:+(vars_1::Dict,vars_2::Dict)
-	applic_over_vars(+,vars_1,vars_2)
-end
-
-## define subtractrion of points
-function Base.:-(vars_1,vars_2)
-	applic_over_vars(-,vars_1::Dict,vars_2::Dict)
-end
-
-
-function rect_hull(x,y)
+function rect_hull(x::Vector,y::Vector)
 	hull=[]
 	for i in powerset(1:length(x))
 		z = copy(x)
@@ -338,77 +233,58 @@ function rect_hull(x,y)
 	return hull
 end
 
-function flatten(dict,keys)
-	flat = Array{Tuple,1}()
-	for key in keys
-		if !(typeof(dict[key]) <: AbstractArray)
-			push!(flat,(key,dict[key]))
-		else
-			for (i,v) in enumerate(dict[key])
-				push!(flat,(key,i,size(dict[key]),dict[key][i]))
-			end
+function rect_hull(x::Sprocket.Point,y::Sprocket.Point)
+	# save in one place
+	out = Sprocket.Point[]
+
+	indices = eachindex(x)
+
+	x_array = []
+	y_array = []
+
+	for i in indices
+		push!(x_array,x[i])
+		push!(y_array,y[i])
+	end
+
+	hull = rect_hull(x_array,y_array)
+
+	for point in hull
+		z = deepcopy(x)
+		for i in 1:length(indices)
+			z[indices[i]] = point[i]
 		end
+		push!(out,z)
 	end
-	return flat
+	return out
 end
 
-function dict_zip(input)
-	my_dict = Dict()
-	for each in input
-		if length(each) == 2
-			my_dict[each[1]] = each[2]
-		else
-			if !in(each[1],keys(my_dict))
-				my_dict[each[1]] = NaN*ones(each[3])
-				my_dict[each[1]][each[2]] = each[4]
-			else
-				my_dict[each[1]][each[2]] = each[4]
-			end
-		end
-	end
-	return my_dict
+
+function Base.:<=(point_1::Sprocket.Point,point_2::Sprocket.Point)
+	all(Sprocket.combine((x,y) -> x <= y, point_1,point_2))
 end
 
-function rect_hull(x::Dict,y::Dict)
-	the_keys = keys(x)
-	flat_points = rect_hull(flatten(x,the_keys),flatten(y,the_keys))
-	out = Set()
-	for point in flat_points
-		push!(out,dict_zip(point))
-	end
-	return collect(out)
-end
-
-function one_norm(x::Dict)
-	return fold_over_vars((cum,element) -> cum + abs(element),0.0,x)
-end
-
-function Base.:<=(var_1::Dict,var_2::Dict)
-	all(map_over_keys(all,applic_over_vars((x,y) -> all(x .<= y ),var_1,var_2)))
+function Base.:<(point_1::Sprocket.Point,point_2::Sprocket.Point)
+	all(Sprocket.combine((x,y) -> x < y, point_1,point_2))
 end
 
 ###
 # for sorting
 ###
-function Base.isless(var_1::Dict,var_2::Dict)
-	var_1 <= var_2
+function Base.isless(point_1::Sprocket.Point,point_2::Sprocket.Point)
+	point_1 <= point_2
 end
 
-function Base.all(vars::Dict)
+function Base.all(point::Sprocket.Point)
 	out = true
-	for key in keys(vars)
-		out = out*vars[key]
+	for i in eachindex(point)
+		out = out*point[i]
 	end
 	return out
 end
 
-function dimension(var::Dict)
-	fold_over_vars((x,y)-> x+1,0,var)
-end
-
-
-function Base.:<(var_1::Dict,var_2::Dict)
-	all(map_over_keys(all,applic_over_vars((x,y) -> all(x .< y ),var_1,var_2)))
+function dimension(point::Sprocket.Point)
+	Sprocket.fold((x,y)-> x+1,0,point)
 end
 
 function Base.string(atom::Baucke.Atom)
@@ -433,3 +309,4 @@ function Base.show(io::IO,atom::Baucke.Atom)
 end
 
 # TODO
+# add way of computing upper bound for unbounded atom
