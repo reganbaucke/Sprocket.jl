@@ -8,6 +8,10 @@ struct Variable{T <: VariableType}
 	type::T
 end
 
+function Variable(;name::Symbol,size::Tuple,type::VariableType)
+	Variable(name,size,type)
+end
+
 # Wrapper for dictionary
 struct Point
 	var_dict::Dict{Variable, Any}

@@ -8,8 +8,10 @@ function build_problem()
 	problem = Sprocket.Problem()
 
 	# add one real valued random variable to the problem
-	xi = Sprocket.Variable(:xi,(),Sprocket.Random())
+	xi = Sprocket.Variable(name=:xi, size=(),type = Sprocket.Random())
+	# another = Sprocket.Variable(:flat,(),Sprocket.Random())
 	Sprocket.add_variable(problem,xi)
+	# Sprocket.add_variable(problem,another)
 
 	# @variable(problem.model, xi)
     # delete(problem.model,xi)
