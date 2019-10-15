@@ -213,6 +213,24 @@ function Base.:/(my_point::Point,scalar::Number)
 	map(x->x*(1/scalar),my_point)
 end
 
+function Base.string(point::Point)
+	out=""
+	for i in eachindex(point)
+		out *= "$i -> $(point[i]), "
+	end
+	return out
+end
+
+function Base.show(io::IO, point::Point)
+	println(io,string(point))
+	return nothing
+end
+
+function Base.println(io::IO,point::Point)
+	println(io,string(point))
+end
+
+
 ## basic tests
 
 hello = Variable(:xi,(2,),Control())
