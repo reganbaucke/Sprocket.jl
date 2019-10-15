@@ -29,31 +29,30 @@ function BauckeAlgorithm()
 		atom = Baucke.Atom()
 		atom.corner_points = []
 
-		point_1 = Sprocket.Point(Dict(prob.vars[:xi] => 0.0))
-		point_2 = Sprocket.Point(Dict(prob.vars[:xi] => 1.0))
+		# point_1 = Sprocket.Point(Dict(prob.vars[:xi] => 0.0))
+		# point_2 = Sprocket.Point(Dict(prob.vars[:xi] => 1.0))
 
-		push!(atom.corner_points,point_1)
-		push!(atom.corner_points,point_2)
+		point_1 = Sprocket.Point(Dict(prob.vars[:xi] => 0.0, prob.vars[:lam] => 0.0))
+		point_2 = Sprocket.Point(Dict(prob.vars[:xi] => 1.0, prob.vars[:lam] => 1.0))
 
+		atom.corner_points = rect_hull(point_1,point_2)
 
 		atom.P = compute_probability(atom,prob.m_oracle)
 		atom.A = compute_average_point(atom,prob.m_oracle)
 
 		compute_weights!(atom)
 
-		println(atom)
-
 		push!(atoms,atom)
 
 		lower = Sprocket.Lowerbound(prob.vars,-99.0)
-		upper = Sprocket.Upperbound(prob.vars,99.0,10.0)
+		upper = Sprocket.Upperbound(prob.vars,99.0,5.0)
 
 		return (lower=lower,upper=upper,atoms=atoms,control=())
 	end
 	function iterate(state,prob)
-
 		biggest_bound = largest_bound_gap(state.atoms,state.control,(state.lower,state.upper))
 		center_point = compute_average_point(biggest_bound,prob.m_oracle)
+
 		# new_state = deepcopy(state)
 		atoms = copy(state.atoms)
 
@@ -68,6 +67,7 @@ function BauckeAlgorithm()
 		delete!(atoms,biggest_bound)
 
 		cut = Sprocket.generate_cut(prob.c_oracle,center_point)
+
 		Sprocket.update!(state.lower,cut)
 		Sprocket.update!(state.upper,cut)
 
@@ -82,11 +82,11 @@ function BauckeAlgorithm()
 end
 
 function compute_probability(atom::Baucke.Atom,oracle)
-	return oracle[1](get_generating_pair(atom)...)
+	return oracle(get_generating_pair(atom)...)[1]
 end
 
 function compute_average_point(atom::Baucke.Atom,oracle)
-	return oracle[2](get_generating_pair(atom)...)/oracle[1](get_generating_pair(atom)...)
+	return oracle(get_generating_pair(atom)...)[2]/oracle(get_generating_pair(atom)...)[1]
 end
 
 function compute_weights!(atom::Baucke.Atom)
@@ -118,6 +118,7 @@ function compute_weights!(atom::Baucke.Atom)
 	#compute the minimum norm whose solution corresponds to the most even weights
 	weights = transpose(A)*(A*transpose(A)\b)
 
+
 	atom.corner_weights = Dict{Any,Float64}()
 	# assign weights
 	for i in eachindex(atom.corner_points)
@@ -143,10 +144,16 @@ function largest_bound_gap(atoms,control,(lower,upper))
 	gap = zeros(size(atoms))
 	upper_val = zeros(size(atoms))
 	lower_val = zeros(size(atoms))
+	# println("BOUND GAPS---------------")
 	for (i,atom) in enumerate(atoms)
 		upper_val[i] = upper_bound(atom,upper,control)
 		lower_val[i] = lower_bound(atom,lower,control)
 		gap[i] = upper_bound(atom,upper,control)-lower_bound(atom,lower,control)
+		# println("--")
+		# println(atom)
+		# println(upper_val[i])
+		# println(lower_val[i])
+
 	end
 
 	println("-----------")
@@ -190,7 +197,7 @@ end
 function upper_bound(atom,upper,control)
 	# unbounded corner points?
 	if !is_bounded(atom)
-		return atom.P*(evaluate(upper,control*bounded_point(atom))+lipschitz*dist(bounded_point(atom),atom.A))
+		return atom.P*(evaluate(upper,bounded_point(atom))+lipschitz*dist(bounded_point(atom),atom.A))
 	end
 
 	# bounded corner points
@@ -299,6 +306,7 @@ end
 
 function Base.show(io::IO,atom::Baucke.Atom)
 	out = ""
+
 	for point in atom.corner_points
 		out *= string(point) * "\n"
 	end
