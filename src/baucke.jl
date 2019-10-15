@@ -27,15 +27,7 @@ function BauckeAlgorithm()
 		atoms = Set()
 
 		atom = Baucke.Atom()
-		atom.corner_points = []
-
-		# point_1 = Sprocket.Point(Dict(prob.vars[:xi] => 0.0))
-		# point_2 = Sprocket.Point(Dict(prob.vars[:xi] => 1.0))
-
-		point_1 = Sprocket.Point(Dict(prob.vars[:xi] => 0.0, prob.vars[:lam] => 0.0))
-		point_2 = Sprocket.Point(Dict(prob.vars[:xi] => 1.0, prob.vars[:lam] => 1.0))
-
-		atom.corner_points = rect_hull(point_1,point_2)
+		atom.corner_points = prob.domain
 
 		atom.P = compute_probability(atom,prob.m_oracle)
 		atom.A = compute_average_point(atom,prob.m_oracle)
