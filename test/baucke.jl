@@ -163,27 +163,30 @@ states = Sprocket.solve(BauckeAlgorithm(),my_prob,Sprocket.Criteria(reltol=0.1))
 # ANSWER = 1.35833
 end
 
+##
+# Test 3, two dimensional problem, one variable with two entries
+##
+
 function test_three()
 function build_problem()
 	#create an empty problem
 	problem = Sprocket.Problem()
 
 	# add one real valued random variable to the problem
-	xi = Sprocket.Variable(name=:xi, size=(),type = Sprocket.Random())
+	xi = Sprocket.Variable(name=:xi, size=(2,) ,type = Sprocket.Random())
 	Sprocket.add_variable(problem,xi)
 
-	# add another variable to the problem, this one is an 1 dimensional array of size 2
-	lam = Sprocket.Variable(name=:lam, size=(2), type = Sprocket.Random())
-	Sprocket.add_variable(problem,lam)
+	#set the domain of the random variable
+	Sprocket.set_domain(problem,rect_hull,(Sprocket.Point(Dict(xi =>[0.0,0.0])), Sprocket.Point(Dict(xi => [1.0,1.0]))))
 
 	# objective function is defined through the cutting plane oracle
 	function my_cutting_plane_oracle()
 		function oracle(vars)
-			value = vars[:xi]^2 + 3*vars[:lam]^2 + 0.1*vars[:lam]*vars[:xi]
+			value = vars[:xi][1]^2 + 3*vars[:xi][2]^2 + 0.1*vars[:xi][1]*vars[:xi][2]
 
 			grad = deepcopy(vars)
-			grad[:xi] = 2*vars[:xi] + 0.1*vars[:lam]
-			grad[:lam] = 0.1*vars[:xi] + 6*vars[:lam]
+			grad[:xi][1] =   2*vars[:xi][1] + 0.1*vars[:xi][2]
+			grad[:xi][2] = 0.1*vars[:xi][1] +   6*vars[:xi][2]
 
 			return (value,grad)
 		end
@@ -193,41 +196,41 @@ function build_problem()
 	# distribution of random variables is defined through the measure oracle
 	function my_measure_oracle()
 		function oracle(vars_1,vars_2)
-			left_xi = vars_1[:xi]
-			right_xi = vars_2[:xi]
-			if vars_1[:xi] <= 0
+			left_xi = vars_1[:xi][1]
+			right_xi = vars_2[:xi][1]
+			if vars_1[:xi][1] <= 0
 				left_xi = 0
 			end
-			if vars_1[:xi] >= 1
+			if vars_1[:xi][1] >= 1
 				left_xi = 1
 			end
-			if vars_2[:xi] <= 0
+			if vars_2[:xi][1] <= 0
 				right_xi = 0
 			end
-			if vars_2[:xi] >= 1
+			if vars_2[:xi][1] >= 1
 				right_xi = 1
 			end
 			factor_xi = right_xi - left_xi
 
-			left_lam = vars_1[:lam]
-			right_lam = vars_2[:lam]
-			if vars_1[:lam] <= 0
+			left_lam = vars_1[:xi][2]
+			right_lam = vars_2[:xi][2]
+			if vars_1[:xi][2] <= 0
 				left_lam = 0
 			end
-			if vars_1[:lam] >= 1
+			if vars_1[:xi][2] >= 1
 				left_lam = 1
 			end
-			if vars_2[:lam] <= 0
+			if vars_2[:xi][2] <= 0
 				right_lam = 0
 			end
-			if vars_2[:lam] >= 1
+			if vars_2[:xi][2] >= 1
 				right_lam = 1
 			end
 			factor_lam = right_lam - left_lam
 
 			fresh = deepcopy(vars_1)
-			fresh[:xi] = (right_xi^2 - left_xi^2)*factor_lam/2
-			fresh[:lam] = (right_lam^2 - left_lam^2)*factor_xi/2
+			fresh[:xi][1] = (right_xi^2 - left_xi^2)*factor_lam/2
+			fresh[:xi][2] = (right_lam^2 - left_lam^2)*factor_xi/2
 			return (factor_lam*factor_xi,fresh)
 		end
 		return oracle
