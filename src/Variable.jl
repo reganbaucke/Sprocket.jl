@@ -231,16 +231,34 @@ function Base.println(io::IO,point::Point)
 end
 
 
+function dimension(vars::Set{Variable})
+	dim = 0
+	for var in vars
+		dim += prod(var.size)
+	end
+	return dim
+end
+
+dimension(var::Variable) = dimension(Set([var]))
+
+function dimension(point::Point)
+	point.var_dict |> keys |> collect |> Set |> dimension
+end
+
+
+
 ## basic tests
 
-hello = Variable(:xi,(2,),Control())
-blue = Variable(:melt,(),Random())
+function test_one()
+	hello = Variable(:xi,(2,),Control())
+	blue = Variable(:melt,(),Random())
 
-ultra = Point(Dict(hello => [10.0,80.0]))
-thick = Point(Dict(blue => 9.0))
+	ultra = Point(Dict(hello => [10.0,80.0]))
+	thick = Point(Dict(blue => 9.0))
 
-my_point = Point(Dict(hello => 9.0))
-new_point = map(x->x+1,my_point)
-another_point = combine((x,y) -> x + y, my_point, new_point)
+	my_point = Point(Dict(hello => 9.0))
+	new_point = map(x->x+1,my_point)
+	another_point = combine((x,y) -> x + y, my_point, new_point)
 
-my_point = Point(Dict(hello => 9.0))
+	my_point = Point(Dict(hello => 9.0))
+end
