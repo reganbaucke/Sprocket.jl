@@ -29,6 +29,8 @@ function BauckeAlgorithm()
 		atom = Baucke.Atom()
 		atom.corner_points = prob.domain
 
+		println(atom.corner_points)
+
 		atom.P = compute_probability(atom,prob.m_oracle)
 		atom.A = compute_average_point(atom,prob.m_oracle)
 
@@ -85,7 +87,7 @@ function compute_weights!(atom::Baucke.Atom)
 	@assert is_bounded(atom)
 
 	# A = zeros(dimension(vars)+1,length(atom.corner_points))
-	A = Array{Float64}(undef,dimension(atom.A)+1,length(atom.corner_points))
+	A = Array{Float64}(undef,Sprocket.dimension(atom.A)+1,length(atom.corner_points))
 
 	# save the indices in one place so the ordering over dicts with the keys is consistent
 	indices = eachindex(atom.A)
@@ -282,9 +284,6 @@ function Base.all(point::Sprocket.Point)
 	return out
 end
 
-function dimension(point::Sprocket.Point)
-	Sprocket.fold((x,y)-> x+1,0,point)
-end
 
 function Base.string(atom::Baucke.Atom)
 	out = ""
