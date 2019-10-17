@@ -1,11 +1,11 @@
 ####
 # In this file we define the BauckeAlgorithm which will solve the optimisation problem exactly
 ####
+module Baucke
 
 using Combinatorics
-# include("./Sprocket.jl")
-
-module Baucke
+using ..Sprocket
+using JuMP
 
 #structs for use in BauckeAlgorithm
 mutable struct Atom
@@ -18,7 +18,18 @@ mutable struct Atom
 	end
 end
 
+struct ControlProblem
+	model::JuMP.Model
 end
+
+struct State
+	lower::Sprocket.Lowerbound
+	upper::Sprocket.Upperbound
+	atoms::Set{Baucke.Atom}
+	control
+	criteria::Sprocket.Criteria
+end
+
 
 
 function BauckeAlgorithm()
@@ -28,8 +39,6 @@ function BauckeAlgorithm()
 
 		atom = Baucke.Atom()
 		atom.corner_points = prob.domain
-
-		println(atom.corner_points)
 
 		atom.P = compute_probability(atom,prob.m_oracle)
 		atom.A = compute_average_point(atom,prob.m_oracle)
@@ -41,10 +50,26 @@ function BauckeAlgorithm()
 		lower = Sprocket.Lowerbound(prob.vars,-99.0)
 		upper = Sprocket.Upperbound(prob.vars,99.0,5.0)
 
-		return (lower=lower,upper=upper,atoms=atoms,control=())
+		###
+		# Set up the control problem
+		###
+		control_problem = copy(prob.model)
+
+		###
+		# Set up the initial status of the criteria
+		###
+		new_criteria = Sprocket.initial_criteria()
+
+
+		return Baucke.State(lower,upper,atoms,(),new_criteria)
 	end
 	function iterate(state,prob)
-		biggest_bound = largest_bound_gap(state.atoms,state.control,(state.lower,state.upper))
+
+		# control = get_control!(state.c)
+
+		# compute the bound gap at the new control
+		# biggest_bound = largest_bound_gap(state.atoms,(state.lower,state.upper))
+		biggest_bound = largest_bound_gap(state.atoms,(),(state.lower,state.upper))
 		center_point = compute_average_point(biggest_bound,prob.m_oracle)
 
 		# new_state = deepcopy(state)
@@ -57,20 +82,38 @@ function BauckeAlgorithm()
 			compute_weights!(atom)
 		end
 
+		# update collection of atoms
 		union!(atoms,new_atoms)
 		delete!(atoms,biggest_bound)
+
+		# update control problem
+		remove_atom!(state.control,biggest_bound)
+		for atom in new_atoms
+			add_atom!(state.control,biggest_bound)
+		end
 
 		cut = Sprocket.generate_cut(prob.c_oracle,center_point)
 
 		Sprocket.update!(state.lower,cut)
 		Sprocket.update!(state.upper,cut)
 
+		add_cut!(state.control,cut)
+
 		# update_control_problem!(control_problem,cut)
 		# get_new_control(control_problem)
-		return (lower=state.lower,upper=state.upper,atoms=atoms,control=())
+
+
+		###
+		# Update Criteria
+		###
+		new_criteria = Sprocket.update_with(state.criteria,iterations = x->x+1)
+
+		# return (lower=state.lower,upper=state.upper,atoms=atoms,control=())
+		return Baucke.State(state.lower,state.upper,atoms,(),new_criteria)
 		# return new_state
 	end
 	function hasmet(crit::Sprocket.Criteria,state)
+		Sprocket.met(state.criteria,crit)
 	end
 	return (initialise,iterate,hasmet)
 end
@@ -305,6 +348,13 @@ function Base.show(io::IO,atom::Baucke.Atom)
 	out*= "probability: $(atom.P) \n"
 	out*= "barycenter: $(atom.A)"
 	println(io,out)
+end
+
+function add_atom!(c,a::Baucke.Atom) end
+function remove_atom!(c,a::Baucke.Atom) end
+function get_control!(c) end
+function add_cut!(c,cut) end
+
 end
 
 # TODO

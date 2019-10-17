@@ -22,10 +22,12 @@ include("./utils.jl")
 function Sprocket.solve(algorithm,prob,crit)
 	(init,iterate,check) = algorithm
 	states = []
+
 	push!(states,init(prob))
-	# while !check(crit,states[end])
-	for i = 1:30
+	while !check(crit,states[end])
+	# for i = 1:60
 		push!(states,iterate(states[end],prob))
+	# end
 	end
 	# end
 	return states
@@ -80,4 +82,5 @@ end
 # solve(BauckeAlgorithm(),build_problem(),Criteria(reltol))
 #
 # end
+export Sprocket
 end
