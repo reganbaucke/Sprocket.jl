@@ -181,6 +181,9 @@ end
 function Base.:*(var_1::Set{Variable},var_2::Variable)
 	return union(var_1,var_2)
 end
+function Base.:*(var_1::Set{Variable},var_2::Variable)
+	return union(var_1,var_2)
+end
 
 function Base.:*(var_1::Variable,var_2::Set{Variable})
 	# check that none of the keys are the same
@@ -245,10 +248,23 @@ function dimension(point::Point)
 	point.var_dict |> keys |> collect |> Set |> dimension
 end
 
+function sub_point(point::Point,sub::Set{Variable})
+	out = Dict{Variable,Any}()
+	for key in filter(x -> in(x,sub),point |> get_vars)
+		out[key] = point.var_dict[key]
+	end
+	Point(out)
+end
 
+sub_point(point::Point,var::Variable) = sub_point(point,Set{Variable}([var]))
+
+function inner(point_1::Point,point_2::Point)
+	@assert get_vars(point_1) == get_vars(point_2)
+	product = combine(*,point_1,point_2)
+	sum = fold(+,0,product)
+end
 
 ## basic tests
-
 function test_one()
 	hello = Variable(:xi,(2,),Control())
 	blue = Variable(:melt,(),Random())
