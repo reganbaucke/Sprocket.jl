@@ -18,9 +18,7 @@ mutable struct Atom
 	end
 end
 
-struct ControlProblem
-	model::JuMP.Model
-end
+include("./ControlProblem.jl")
 
 struct State
 	lower::Sprocket.Lowerbound
@@ -29,8 +27,6 @@ struct State
 	control
 	criteria::Sprocket.Criteria
 end
-
-
 
 function BauckeAlgorithm()
 	function initialise(prob)
@@ -53,7 +49,9 @@ function BauckeAlgorithm()
 		###
 		# Set up the control problem
 		###
-		control_problem = copy(prob.model)
+		control_problem = build_control_problem(prob)
+		add_atom(control_problem,atom)
+		println(control_problem)
 
 		###
 		# Set up the initial status of the criteria
@@ -61,15 +59,18 @@ function BauckeAlgorithm()
 		new_criteria = Sprocket.initial_criteria()
 
 
-		return Baucke.State(lower,upper,atoms,(),new_criteria)
+		return Baucke.State(lower,upper,atoms,control_problem,new_criteria)
 	end
+
+
 	function iterate(state,prob)
 
-		# control = get_control!(state.c)
+		control = get_new_control(state.control)
 
 		# compute the bound gap at the new control
 		# biggest_bound = largest_bound_gap(state.atoms,(state.lower,state.upper))
-		biggest_bound = largest_bound_gap(state.atoms,(),(state.lower,state.upper))
+
+		biggest_bound = largest_bound_gap(state.atoms,control,(state.lower,state.upper))
 		center_point = compute_average_point(biggest_bound,prob.m_oracle)
 
 		# new_state = deepcopy(state)
@@ -86,22 +87,21 @@ function BauckeAlgorithm()
 		union!(atoms,new_atoms)
 		delete!(atoms,biggest_bound)
 
-		# update control problem
-		remove_atom!(state.control,biggest_bound)
-		for atom in new_atoms
-			add_atom!(state.control,biggest_bound)
-		end
+		# get cut at this point
+		cut = Sprocket.generate_cut(prob.c_oracle,center_point*control)
 
-		cut = Sprocket.generate_cut(prob.c_oracle,center_point)
+		# update control problem
+		delete_atom(state.control,biggest_bound)
+		for atom in new_atoms
+			add_atom(state.control,atom)
+			gen_constraints_for_new_atom(state.control,atom)
+		end
+		update_all_atoms_with_cut(state.control,cut)
 
 		Sprocket.update!(state.lower,cut)
 		Sprocket.update!(state.upper,cut)
 
 		add_cut!(state.control,cut)
-
-		# update_control_problem!(control_problem,cut)
-		# get_new_control(control_problem)
-
 
 		###
 		# Update Criteria
@@ -109,7 +109,7 @@ function BauckeAlgorithm()
 		new_criteria = Sprocket.update_with(state.criteria,iterations = x->x+1)
 
 		# return (lower=state.lower,upper=state.upper,atoms=atoms,control=())
-		return Baucke.State(state.lower,state.upper,atoms,(),new_criteria)
+		return Baucke.State(state.lower,state.upper,atoms,state.control,new_criteria)
 		# return new_state
 	end
 	function hasmet(crit::Sprocket.Criteria,state)
@@ -218,7 +218,7 @@ function largest_bound_gap(atoms,control,(lower,upper))
 end
 
 function lower_bound(atom,lower,control)
-	return atom.P*(Sprocket.evaluate(lower,atom.A))
+		atom.P*(Sprocket.evaluate(lower,atom.A*control))
 end
 
 function is_bounded(atom::Baucke.Atom)
@@ -240,9 +240,8 @@ function upper_bound(atom,upper,control)
 	# bounded corner points
 	sum = 0.0
 	for point in atom.corner_points
-		sum+= atom.corner_weights[point]*Sprocket.evaluate(upper,point)
+		sum+= atom.corner_weights[point]*Sprocket.evaluate(upper,point*control)
 	end
-
 	return sum*atom.P
 end
 
