@@ -37,16 +37,16 @@ function build_problem()
 			left = vars_1[:xi]
 			right = vars_2[:xi]
 			if vars_1[:xi] <= 0
-				left = 0
+				left = 0.0
 			end
 			if vars_1[:xi] >= 1
-				left = 1
+				left = 1.0
 			end
 			if vars_2[:xi] <= 0
-				right = 0
+				right = 0.0
 			end
 			if vars_2[:xi] >= 1
-				right = 1
+				right = 1.0
 			end
 			fresh = deepcopy(vars_1)
 			fresh[:xi] = (right^2 - left^2)/2
@@ -75,7 +75,6 @@ end
 ##
 # Test 2, two dimensional problem no control
 ##
-
 function test_two()
 
 function build_problem()
@@ -113,32 +112,32 @@ function build_problem()
 			left_xi = vars_1[:xi]
 			right_xi = vars_2[:xi]
 			if vars_1[:xi] <= 0
-				left_xi = 0
+				left_xi = 0.0
 			end
 			if vars_1[:xi] >= 1
-				left_xi = 1
+				left_xi = 1.0
 			end
 			if vars_2[:xi] <= 0
-				right_xi = 0
+				right_xi = 0.0
 			end
 			if vars_2[:xi] >= 1
-				right_xi = 1
+				right_xi = 1.0
 			end
 			factor_xi = right_xi - left_xi
 
 			left_lam = vars_1[:lam]
 			right_lam = vars_2[:lam]
 			if vars_1[:lam] <= 0
-				left_lam = 0
+				left_lam = 0.0
 			end
 			if vars_1[:lam] >= 1
-				left_lam = 1
+				left_lam = 1.0
 			end
 			if vars_2[:lam] <= 0
-				right_lam = 0
+				right_lam = 0.0
 			end
 			if vars_2[:lam] >= 1
-				right_lam = 1
+				right_lam = 1.0
 			end
 			factor_lam = right_lam - left_lam
 
@@ -158,7 +157,7 @@ end
 
 my_prob = build_problem()
 # Sprocket.Criteria(reltol=0.1)
-states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations = 10))
+states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations = 30))
 # ANSWER = 1.35833
 end
 
@@ -198,32 +197,32 @@ function build_problem()
 			left_xi = vars_1[:xi][1]
 			right_xi = vars_2[:xi][1]
 			if vars_1[:xi][1] <= 0
-				left_xi = 0
+				left_xi = 0.0
 			end
 			if vars_1[:xi][1] >= 1
-				left_xi = 1
+				left_xi = 1.0
 			end
 			if vars_2[:xi][1] <= 0
-				right_xi = 0
+				right_xi = 0.0
 			end
 			if vars_2[:xi][1] >= 1
-				right_xi = 1
+				right_xi = 1.0
 			end
 			factor_xi = right_xi - left_xi
 
 			left_lam = vars_1[:xi][2]
 			right_lam = vars_2[:xi][2]
 			if vars_1[:xi][2] <= 0
-				left_lam = 0
+				left_lam = 0.0
 			end
 			if vars_1[:xi][2] >= 1
-				left_lam = 1
+				left_lam = 1.0
 			end
 			if vars_2[:xi][2] <= 0
-				right_lam = 0
+				right_lam = 0.0
 			end
 			if vars_2[:xi][2] >= 1
-				right_lam = 1
+				right_lam = 1.0
 			end
 			factor_lam = right_lam - left_lam
 
@@ -268,7 +267,7 @@ function build_problem()
 
 	u = Sprocket.Variable(name=:u, size=(),type=Sprocket.Control())
 	add_variable(problem,u)
-	@constraint(problem.model, -1.0 <= u <= 1.0)
+	@variable(problem.model, -1.0 <= u <= 1.0)
 
 
 	# objective function is defined through the cutting plane oracle
@@ -289,16 +288,16 @@ function build_problem()
 			left = vars_1[:xi]
 			right = vars_2[:xi]
 			if vars_1[:xi] <= 0
-				left = 0
+				left = 0.0
 			end
 			if vars_1[:xi] >= 1
-				left = 1
+				left = 1.0
 			end
 			if vars_2[:xi] <= 0
-				right = 0
+				right = 0.0
 			end
 			if vars_2[:xi] >= 1
-				right = 1
+				right = 1.0
 			end
 			fresh = deepcopy(vars_1)
 			fresh[:xi] = (right^2 - left^2)/2
@@ -315,10 +314,9 @@ end
 
 
 my_prob = build_problem()
-Sprocket.Criteria(reltol=0.1)
-states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations = 10))
-
-return nothing
+states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations = 50))
+# return get_new_control(states[end].control)
+return states[end]
 ### ANSWER = 0.2
 end
 
