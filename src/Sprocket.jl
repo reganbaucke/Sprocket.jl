@@ -1,11 +1,12 @@
 module Sprocket
 # include("./Point.jl")
+
+include("./utils.jl")
 include("./Variable.jl")
 include("./Cut.jl")
 include("./Problem.jl")
 include("./Bound.jl")
 include("./Criteria.jl")
-include("./utils.jl")
 
 # the main solving routine
 
