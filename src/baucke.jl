@@ -181,16 +181,10 @@ function largest_bound_gap(atoms,control,(lower,upper))
 	gap = zeros(size(atoms))
 	upper_val = zeros(size(atoms))
 	lower_val = zeros(size(atoms))
-	# println("BOUND GAPS---------------")
 	for (i,atom) in enumerate(atoms)
 		upper_val[i] = upper_bound(atom,upper,control)
 		lower_val[i] = lower_bound(atom,lower,control)
 		gap[i] = upper_bound(atom,upper,control)-lower_bound(atom,lower,control)
-		# println("--")
-		# println(atom)
-		# println(upper_val[i])
-		# println(lower_val[i])
-
 	end
 
 	println("-----------")
@@ -199,20 +193,8 @@ function largest_bound_gap(atoms,control,(lower,upper))
 	println(sum(upper_val))
 	println(sum(lower_val))
 
-	# println(lower.cuts)
 
 	(value,index) = findmax(gap)
-
-	# for (i,atom) in enumerate(atoms)
-	# 	println("--")
-	# 	if index == i
-	# 		println("!!!!!")
-	# 	end
-	# 	println(atoms[i])
-	# 	println(upper_val[i])
-	# 	println(lower_val[i])
-	# 	println("--")
-	# end
 
 	return atoms[index]
 end
