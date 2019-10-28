@@ -63,10 +63,11 @@ end
 
 
 my_prob = build_problem()
-Sprocket.Criteria(reltol=0.1)
-states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations=10))
+my_criteria = Sprocket.Criteria(reltol=0.4)
 
-return nothing
+states = Sprocket.solve(Baucke.BauckeAlgorithm(), my_prob, my_criteria)
+
+return states
 ### ANSWER = 0.2
 end
 
@@ -241,7 +242,6 @@ function build_problem()
 end
 
 my_prob = build_problem()
-# Sprocket.Criteria(reltol=0.1)
 states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations = 60))
 
 return nothing
@@ -314,9 +314,8 @@ end
 
 my_prob = build_problem()
 states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations = 50))
-# return get_new_control(states[end].control)
-### ANSWER = 0.332
 return nothing
+
 end
 
 

@@ -71,7 +71,7 @@ function BauckeAlgorithm()
 
 		# compute the bound gap at the new control
 		# biggest_bound = largest_bound_gap(state.atoms,(state.lower,state.upper))
-		biggest_bound = largest_bound_gap(state.atoms,control,(state.lower,state.upper))
+		(biggest_bound, upper_bound, lower_bound )= largest_bound_gap(state.atoms,control,(state.lower,state.upper))
 		center_point = compute_average_point(biggest_bound,prob.m_oracle)
 
 		# new_state = deepcopy(state)
@@ -108,15 +108,27 @@ function BauckeAlgorithm()
 		###
 		# Update Criteria
 		###
-		new_criteria = Sprocket.update_with(state.criteria,iterations = x->x+1)
 
-		# return (lower=state.lower,upper=state.upper,atoms=atoms,control=())
-		return Baucke.State(state.lower,state.upper,atoms,state.control,new_criteria)
+		# new_criteria = Sprocket.update_with(state.criteria,
+    #   iterations = x -> x + 1)
+    #   iterations = x->x+1)
+
+    new_criteria = Sprocket.update_with(state.criteria,
+      iterations = state.criteria.iterations + 1,
+      upper = upper_bound,
+      lower = lower_bound,
+      abstol = abstol(upper_bound,lower_bound),
+      reltol = reltol_upper(upper_bound,lower_bound)
+    )
+
 		# return new_state
+		return Baucke.State(state.lower,state.upper,atoms,state.control,new_criteria)
 	end
-	function hasmet(crit::Sprocket.Criteria,state)
-		Sprocket.met(state.criteria,crit)
-	end
+
+  function hasmet(crit::Sprocket.Criteria,state)
+    Sprocket.met(state.criteria,crit)
+  end
+
 	return (initialise,iterate,hasmet)
 end
 
@@ -189,16 +201,9 @@ function largest_bound_gap(atoms,control,(lower,upper))
 		gap[i] = upper_bound(atom,upper,control)-lower_bound(atom,lower,control)
 	end
 
-	println("-----------")
-	println(sum(gap))
-	println("-")
-	println(sum(upper_val))
-	println(sum(lower_val))
-
-
 	(value,index) = findmax(gap)
 
-	return atoms[index]
+	return (atoms[index], sum(upper_val), sum(lower_val))
 end
 
 function lower_bound(atom,lower,control)
@@ -338,7 +343,20 @@ function remove_atom!(c,a::Baucke.Atom) end
 function get_control!(c) end
 function add_cut!(c,cut) end
 
+function reltol_lower(upper::Float64, lower::Float64)
+  (upper - lower)/lower
 end
+
+function reltol_upper(upper::Float64, lower::Float64)
+  (upper - lower)/upper
+end
+
+function abstol(upper::Float64, lower::Float64)
+  upper - lower
+end
+
+end
+
 
 # TODO
 # add way of computing upper bound for unbounded atom
