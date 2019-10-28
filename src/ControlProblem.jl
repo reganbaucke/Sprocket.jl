@@ -17,6 +17,9 @@ end
 function build_control_problem(prob::Sprocket.Problem)
 	# determine the control variables
 	controls = filter(x->x.type == Sprocket.Control(),prob.vars)
+	if isempty(controls)
+		return nothing
+	end
 
 	my_model = copy(prob.model)
 	@objective(my_model,Min,0)
@@ -31,8 +34,7 @@ function build_control_problem(prob::Sprocket.Problem)
 	end
 
 	cuts = Sprocket.Cut[]
-	println(Sprocket.Point(storage))
-	ControlProblem(my_model,Sprocket.Point(storage),epi_vars,cut_constraints,cuts)
+	Some(ControlProblem(my_model,Sprocket.Point(storage),epi_vars,cut_constraints,cuts))
 end
 
 function add_atom(prob::ControlProblem,atom::Baucke.Atom)

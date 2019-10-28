@@ -174,6 +174,23 @@ function Base.:*(point_1::Point,point_2::Point)
 	return out
 end
 
+function Base.:*(point_1::Point,point_2::Some{Point})
+	# check that none of the keys are the same
+	out = deepcopy(point_1)
+	for var in keys(point_2.value.var_dict)
+		out.var_dict[var] = copy(point_2.value.var_dict[var])
+	end
+	return out
+end
+
+function Base.:*(point_1::Point,point_2::Nothing)
+	point_1
+end
+
+function Base.:*(point_1::Nothing,point_2::Point)
+	point_2
+end
+
 function Base.:*(var_1::Variable,var_2::Variable)
 	return Set([var_1,var_2])
 end

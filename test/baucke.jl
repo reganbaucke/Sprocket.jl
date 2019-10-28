@@ -71,7 +71,6 @@ return nothing
 end
 
 
-
 ##
 # Test 2, two dimensional problem no control
 ##
@@ -159,6 +158,7 @@ my_prob = build_problem()
 # Sprocket.Criteria(reltol=0.1)
 states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations = 30))
 # ANSWER = 1.35833
+return nothing
 end
 
 ##
@@ -245,7 +245,6 @@ my_prob = build_problem()
 states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations = 60))
 
 return nothing
-
 # ANSWER = 1.35833
 end
 
@@ -316,8 +315,8 @@ end
 my_prob = build_problem()
 states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations = 50))
 # return get_new_control(states[end].control)
-return states[end]
-### ANSWER = 0.2
+### ANSWER = 0.332
+return nothing
 end
 
 
@@ -325,5 +324,5 @@ function test_all()
 	test_one()
 	test_two()
 	test_three()
-	# test_four()
+	test_four()
 end

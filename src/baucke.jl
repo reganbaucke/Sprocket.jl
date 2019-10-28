@@ -50,8 +50,10 @@ function BauckeAlgorithm()
 		# Set up the control problem
 		###
 		control_problem = build_control_problem(prob)
-		add_atom(control_problem,atom)
-		println(control_problem)
+		if control_problem != nothing
+			add_atom(control_problem.value , atom)
+		end
+
 
 		###
 		# Set up the initial status of the criteria
@@ -65,11 +67,10 @@ function BauckeAlgorithm()
 
 	function iterate(state,prob)
 
-		control = get_new_control(state.control)
+		control = map(get_new_control, state.control)
 
 		# compute the bound gap at the new control
 		# biggest_bound = largest_bound_gap(state.atoms,(state.lower,state.upper))
-
 		biggest_bound = largest_bound_gap(state.atoms,control,(state.lower,state.upper))
 		center_point = compute_average_point(biggest_bound,prob.m_oracle)
 
@@ -91,17 +92,18 @@ function BauckeAlgorithm()
 		cut = Sprocket.generate_cut(prob.c_oracle,center_point*control)
 
 		# update control problem
-		delete_atom(state.control,biggest_bound)
-		for atom in new_atoms
-			add_atom(state.control,atom)
-			gen_constraints_for_new_atom(state.control,atom)
-		end
-		update_all_atoms_with_cut(state.control,cut)
+    if state.control != nothing
+  		delete_atom(state.control.value,biggest_bound)
+  		for atom in new_atoms
+  			add_atom(state.control.value,atom)
+  			gen_constraints_for_new_atom(state.control.value,atom)
+  		end
+  		update_all_atoms_with_cut(state.control.value,cut)
+  		add_cut!(state.control.value,cut)
+    end
 
 		Sprocket.update!(state.lower,cut)
 		Sprocket.update!(state.upper,cut)
-
-		add_cut!(state.control,cut)
 
 		###
 		# Update Criteria
