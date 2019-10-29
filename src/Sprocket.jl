@@ -80,7 +80,7 @@ end
 # 	return problem
 # end
 #
-# solve(BauckeAlgorithm(),build_problem(),Criteria(reltol))
+# solve(ExactAlgorithm(),build_problem(),Criteria(reltol))
 #
 # end
 export Sprocket

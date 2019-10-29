@@ -1,8 +1,9 @@
 include("../src/Sprocket.jl")
-include("../src/Baucke.jl")
+include("../src/Exact.jl")
 using .Sprocket
-using .Baucke
+using .Exact
 using JuMP
+using SpecialFunctions
 
 ##
 # One dimensional problem, no control
@@ -18,7 +19,7 @@ function build_problem()
 	Sprocket.add_variable(problem,xi)
 
 	#set the domain of the random variable
-	Sprocket.set_domain(problem,Baucke.rect_hull,(Sprocket.Point(Dict(xi =>0.0)), Sprocket.Point(Dict(xi => 1.0))))
+	Sprocket.set_domain(problem,Exact.rect_hull,(Sprocket.Point(Dict(xi =>0.0)), Sprocket.Point(Dict(xi => 1.0))))
 
 	# objective function is defined through the cutting plane oracle
 	function my_cutting_plane_oracle()
@@ -63,13 +64,13 @@ end
 
 
 my_prob = build_problem()
-Sprocket.Criteria(reltol=0.1)
-states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations=10))
+my_criteria = Sprocket.Criteria(reltol=0.4)
 
-return nothing
+states = Sprocket.solve(Exact.ExactAlgorithm(), my_prob, my_criteria)
+
+return states
 ### ANSWER = 0.2
 end
-
 
 
 ##
@@ -90,7 +91,7 @@ function build_problem()
 	Sprocket.add_variable(problem,lam)
 
 	#set the domain of the random variable
-	Sprocket.set_domain(problem,Baucke.rect_hull,(Sprocket.Point(Dict(xi =>0.0,lam => 0.0 )), Sprocket.Point(Dict(xi => 1.0, lam => 1.0))))
+	Sprocket.set_domain(problem,Exact.rect_hull,(Sprocket.Point(Dict(xi =>0.0,lam => 0.0 )), Sprocket.Point(Dict(xi => 1.0, lam => 1.0))))
 
 	# objective function is defined through the cutting plane oracle
 	function my_cutting_plane_oracle()
@@ -157,8 +158,9 @@ end
 
 my_prob = build_problem()
 # Sprocket.Criteria(reltol=0.1)
-states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations = 30))
+states = Sprocket.solve(Exact.ExactAlgorithm(),my_prob,Sprocket.Criteria(iterations = 30))
 # ANSWER = 1.35833
+return nothing
 end
 
 ##
@@ -175,7 +177,7 @@ function build_problem()
 	Sprocket.add_variable(problem,xi)
 
 	#set the domain of the random variable
-	Sprocket.set_domain(problem,Baucke.rect_hull,(Sprocket.Point(Dict(xi =>[0.0,0.0])), Sprocket.Point(Dict(xi => [1.0,1.0]))))
+	Sprocket.set_domain(problem,Exact.rect_hull,(Sprocket.Point(Dict(xi =>[0.0,0.0])), Sprocket.Point(Dict(xi => [1.0,1.0]))))
 
 	# objective function is defined through the cutting plane oracle
 	function my_cutting_plane_oracle()
@@ -241,11 +243,9 @@ function build_problem()
 end
 
 my_prob = build_problem()
-# Sprocket.Criteria(reltol=0.1)
-states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations = 60))
+states = Sprocket.solve(Exact.ExactAlgorithm(),my_prob,Sprocket.Criteria(iterations = 60))
 
 return nothing
-
 # ANSWER = 1.35833
 end
 
@@ -263,7 +263,7 @@ function build_problem()
 	Sprocket.add_variable(problem,xi)
 
 	#set the domain of the random variable
-	Sprocket.set_domain(problem,Baucke.rect_hull,(Sprocket.Point(Dict(xi =>0.0)), Sprocket.Point(Dict(xi => 1.0))))
+	Sprocket.set_domain(problem,Exact.rect_hull,(Sprocket.Point(Dict(xi =>0.0)), Sprocket.Point(Dict(xi => 1.0))))
 
 	u = Sprocket.Variable(name=:u, size=(),type=Sprocket.Control())
 	add_variable(problem,u)
@@ -314,16 +314,137 @@ end
 
 
 my_prob = build_problem()
-states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations = 50))
-# return get_new_control(states[end].control)
-return states[end]
-### ANSWER = 0.2
+states = Sprocket.solve(Exact.ExactAlgorithm(),my_prob,Sprocket.Criteria(iterations = 50))
+return nothing
+
+end
+
+##
+# One dimensional problem no control, unbounded support for the random variable (random variable is normally distributed)
+##
+function test_five()
+
+function build_problem()
+	#create an empty problem
+	problem = Sprocket.Problem()
+
+	# add one real valued random variable to the problem
+	xi = Sprocket.Variable(name=:xi, size=(),type=Sprocket.Random())
+	Sprocket.add_variable(problem,xi)
+
+	#set the domain of the random variable
+	Sprocket.set_domain(problem,Exact.rect_hull,(Sprocket.Point(Dict(xi =>-Inf)), Sprocket.Point(Dict(xi => Inf))))
+
+	# objective function is defined through the cutting plane oracle
+  # This function has unbounded support but is also Lipschitz continuous with Lipschitz constant 1
+	function my_cutting_plane_oracle()
+		function oracle(vars)
+			value = -log(2) - vars[:xi]/2 + log(exp(vars[:xi]) + 1)
+			grad = deepcopy(vars)
+			grad[:xi] = 1/2 - 1/(1 + exp(vars[:xi]))
+			return (value,grad)
+		end
+		return oracle
+	end
+
+	# distribution of random variables is defined through the measure oracle
+  # below is the oracle for the standard normal distribution
+	function my_measure_oracle()
+		function oracle(vars_1,vars_2)
+      probability = 0.5*(erf(vars_2[:xi]/sqrt(2)) - erf(vars_1[:xi]/sqrt(2)))
+      first_order =  deepcopy(vars_1)
+      first_order[:xi] =  (exp(-vars_1[:xi]^2/2) - exp(-vars_2[:xi]^2/2))/sqrt(2*pi)
+
+			return (probability,first_order)
+		end
+		return oracle
+	end
+
+  problem.c_oracle = my_cutting_plane_oracle()
+  problem.m_oracle = my_measure_oracle()
+
+	return problem
+end
+
+my_prob = build_problem()
+# my_criteria = Sprocket.Criteria(abstol=0.001)
+my_criteria = Sprocket.Criteria(iterations = 100)
+
+states = Sprocket.solve(Exact.ExactAlgorithm(), my_prob, my_criteria)
+
+return states
+### ANSWER = 0.112912
+end
+
+##
+# One dimensional problem with control, unbounded support for the random variable (random variable is normally distributed)
+##
+function test_six()
+
+function build_problem()
+	#create an empty problem
+	problem = Sprocket.Problem()
+
+	# add one real valued random variable to the problem
+	xi = Sprocket.Variable(name=:xi, size=(),type=Sprocket.Random())
+	Sprocket.add_variable(problem,xi)
+
+	#set the domain of the random variable
+	Sprocket.set_domain(problem,Exact.rect_hull,(Sprocket.Point(Dict(xi =>-Inf)), Sprocket.Point(Dict(xi => Inf))))
+
+	u = Sprocket.Variable(name=:u, size=(),type=Sprocket.Control())
+	add_variable(problem,u)
+	@variable(problem.model, -1.0 <= u <= 1.0)
+
+	# objective function is defined through the cutting plane oracle
+  # This function has unbounded support but is also Lipschitz continuous with Lipschitz constant 1
+	function my_cutting_plane_oracle()
+		function oracle(vars)
+			value = -log(2) - vars[:xi]/2 + log(exp(vars[:xi]+ vars[:u]) + 1) + vars[:u]
+			grad = deepcopy(vars)
+      grad[:xi] = exp(vars[:u] + vars[:xi])/(exp(vars[:u] + vars[:xi]) + 1) - 1/2
+      grad[:u] = exp(vars[:u] + vars[:xi])/(exp(vars[:u] + vars[:xi]) + 1) + 1
+			return (value,grad)
+		end
+		return oracle
+	end
+
+	# distribution of random variables is defined through the measure oracle
+  # below is the oracle for the standard normal distribution
+	function my_measure_oracle()
+		function oracle(vars_1,vars_2)
+      probability = 0.5*(erf(vars_2[:xi]/sqrt(2)) - erf(vars_1[:xi]/sqrt(2)))
+      first_order =  deepcopy(vars_1)
+      first_order[:xi] =  (exp(-vars_1[:xi]^2/2) - exp(-vars_2[:xi]^2/2))/sqrt(2*pi)
+
+			return (probability,first_order)
+		end
+		return oracle
+	end
+
+  problem.c_oracle = my_cutting_plane_oracle()
+  problem.m_oracle = my_measure_oracle()
+
+	return problem
+end
+
+my_prob = build_problem()
+# my_criteria = Sprocket.Criteria(abstol=0.001)
+my_criteria = Sprocket.Criteria(iterations = 20)
+
+states = Sprocket.solve(Exact.ExactAlgorithm(), my_prob, my_criteria)
+
+return states
+
+# don't know the true answer
+
 end
 
 
 function test_all()
-	test_one()
-	test_two()
-	test_three()
-	# test_four()
+  test_one()
+  test_two()
+  test_three()
+  test_four()
+  test_five()
 end

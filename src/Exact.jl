@@ -1,13 +1,13 @@
 ####
-# In this file we define the BauckeAlgorithm which will solve the optimisation problem exactly
+# In this file we define the ExactAlgorithm which will solve the optimisation problem exactly
 ####
-module Baucke
+module Exact
 
 using Combinatorics
 using ..Sprocket
 using JuMP
 
-#structs for use in BauckeAlgorithm
+#structs for use in ExactAlgorithm
 mutable struct Atom
 	corner_points
 	corner_weights
@@ -23,23 +23,25 @@ include("./ControlProblem.jl")
 struct State
 	lower::Sprocket.Lowerbound
 	upper::Sprocket.Upperbound
-	atoms::Set{Baucke.Atom}
+	atoms::Set{Exact.Atom}
 	control
 	criteria::Sprocket.Criteria
 end
 
-function BauckeAlgorithm()
+function ExactAlgorithm()
 	function initialise(prob)
 
 		atoms = Set()
 
-		atom = Baucke.Atom()
+		atom = Exact.Atom()
 		atom.corner_points = prob.domain
 
 		atom.P = compute_probability(atom,prob.m_oracle)
 		atom.A = compute_average_point(atom,prob.m_oracle)
 
-		compute_weights!(atom)
+    if atom |> is_bounded
+  		compute_weights!(atom)
+    end
 
 		push!(atoms,atom)
 
@@ -50,27 +52,26 @@ function BauckeAlgorithm()
 		# Set up the control problem
 		###
 		control_problem = build_control_problem(prob)
-		add_atom(control_problem,atom)
-		println(control_problem)
+		if control_problem != nothing
+			add_atom(control_problem.value , atom)
+		end
 
 		###
 		# Set up the initial status of the criteria
 		###
 		new_criteria = Sprocket.initial_criteria()
 
-
-		return Baucke.State(lower,upper,atoms,control_problem,new_criteria)
+		return Exact.State(lower,upper,atoms,control_problem,new_criteria)
 	end
 
 
 	function iterate(state,prob)
 
-		control = get_new_control(state.control)
+		control = map(get_new_control, state.control)
 
 		# compute the bound gap at the new control
 		# biggest_bound = largest_bound_gap(state.atoms,(state.lower,state.upper))
-
-		biggest_bound = largest_bound_gap(state.atoms,control,(state.lower,state.upper))
+		(biggest_bound, upper_bound, lower_bound )= largest_bound_gap(state.atoms,control,(state.lower,state.upper))
 		center_point = compute_average_point(biggest_bound,prob.m_oracle)
 
 		# new_state = deepcopy(state)
@@ -80,7 +81,9 @@ function BauckeAlgorithm()
 		for atom in new_atoms
 			atom.P = compute_probability(atom,prob.m_oracle)
 			atom.A = compute_average_point(atom,prob.m_oracle)
-			compute_weights!(atom)
+      if atom |> is_bounded
+  			compute_weights!(atom)
+      end
 		end
 
 		# update collection of atoms
@@ -91,42 +94,55 @@ function BauckeAlgorithm()
 		cut = Sprocket.generate_cut(prob.c_oracle,center_point*control)
 
 		# update control problem
-		delete_atom(state.control,biggest_bound)
-		for atom in new_atoms
-			add_atom(state.control,atom)
-			gen_constraints_for_new_atom(state.control,atom)
-		end
-		update_all_atoms_with_cut(state.control,cut)
+    if state.control != nothing
+  		delete_atom(state.control.value,biggest_bound)
+  		for atom in new_atoms
+  			add_atom(state.control.value,atom)
+  			gen_constraints_for_new_atom(state.control.value,atom)
+  		end
+  		update_all_atoms_with_cut(state.control.value,cut)
+  		add_cut!(state.control.value,cut)
+    end
 
 		Sprocket.update!(state.lower,cut)
 		Sprocket.update!(state.upper,cut)
 
-		add_cut!(state.control,cut)
-
 		###
 		# Update Criteria
 		###
-		new_criteria = Sprocket.update_with(state.criteria,iterations = x->x+1)
 
-		# return (lower=state.lower,upper=state.upper,atoms=atoms,control=())
-		return Baucke.State(state.lower,state.upper,atoms,state.control,new_criteria)
+		# new_criteria = Sprocket.update_with(state.criteria,
+    #   iterations = x -> x + 1)
+    #   iterations = x->x+1)
+
+    new_criteria = Sprocket.update_with(state.criteria,
+      iterations = state.criteria.iterations + 1,
+      upper = upper_bound,
+      lower = lower_bound,
+      abstol = abstol(upper_bound,lower_bound),
+      reltol = reltol_upper(upper_bound,lower_bound)
+    )
+
 		# return new_state
+		return Exact.State(state.lower,state.upper,atoms,state.control,new_criteria)
 	end
-	function hasmet(crit::Sprocket.Criteria,state)
-		Sprocket.met(state.criteria,crit)
-	end
+
+  function hasmet(crit::Sprocket.Criteria,state)
+    Sprocket.met(state.criteria,crit)
+  end
+
 	return (initialise,iterate,hasmet)
 end
 
-function compute_probability(atom::Baucke.Atom,oracle)
+function compute_probability(atom::Exact.Atom,oracle)
 	return oracle(get_generating_pair(atom)...)[1]
 end
 
-function compute_average_point(atom::Baucke.Atom,oracle)
+function compute_average_point(atom::Exact.Atom,oracle)
 	return oracle(get_generating_pair(atom)...)[2]/oracle(get_generating_pair(atom)...)[1]
 end
 
-function compute_weights!(atom::Baucke.Atom)
+function compute_weights!(atom::Exact.Atom)
 	@assert is_bounded(atom)
 
 	# A = zeros(dimension(vars)+1,length(atom.corner_points))
@@ -165,10 +181,10 @@ function compute_weights!(atom::Baucke.Atom)
 	return nothing
 end
 
-function split_atom(atom::Baucke.Atom,center)
+function split_atom(atom::Exact.Atom,center)
 	atoms = Set()
 	for corner in atom.corner_points
-		new_atom = Baucke.Atom()
+		new_atom = Exact.Atom()
 		new_atom.corner_points = rect_hull(corner,center)
 		push!(atoms,new_atom)
 	end
@@ -181,49 +197,33 @@ function largest_bound_gap(atoms,control,(lower,upper))
 	gap = zeros(size(atoms))
 	upper_val = zeros(size(atoms))
 	lower_val = zeros(size(atoms))
-	# println("BOUND GAPS---------------")
 	for (i,atom) in enumerate(atoms)
 		upper_val[i] = upper_bound(atom,upper,control)
 		lower_val[i] = lower_bound(atom,lower,control)
 		gap[i] = upper_bound(atom,upper,control)-lower_bound(atom,lower,control)
-		# println("--")
-		# println(atom)
-		# println(upper_val[i])
-		# println(lower_val[i])
-
 	end
-
-	println("-----------")
-	println(sum(gap))
-	println("-")
-	println(sum(upper_val))
-	println(sum(lower_val))
-
-	# println(lower.cuts)
 
 	(value,index) = findmax(gap)
 
-	# for (i,atom) in enumerate(atoms)
-	# 	println("--")
-	# 	if index == i
-	# 		println("!!!!!")
-	# 	end
-	# 	println(atoms[i])
-	# 	println(upper_val[i])
-	# 	println(lower_val[i])
-	# 	println("--")
-	# end
-
-	return atoms[index]
+	return (atoms[index], sum(upper_val), sum(lower_val))
 end
 
 function lower_bound(atom,lower,control)
 		atom.P*(Sprocket.evaluate(lower,atom.A*control))
 end
 
-function is_bounded(atom::Baucke.Atom)
+function is_bounded(atom::Exact.Atom)
 	for point in atom.corner_points
-		if !all(map(x-> x!=Inf || x!=-Inf,point))
+		if any(map(x -> x == Inf || x == -Inf, point))
+			return false
+		end
+	end
+	return true
+end
+
+function is_fully_unbounded(atom::Exact.Atom)
+	for point in get_generating_pair(atom)
+		if !all(map(x -> x == Inf || x == -Inf, point))
 			return false
 		end
 	end
@@ -233,11 +233,17 @@ end
 
 function upper_bound(atom,upper,control)
 	# unbounded corner points?
+  LIP_CONST = 10
+  ## if atom is unbounded, compute a bound based of the paper; take the closest point to the average po
 	if !is_bounded(atom)
-		return atom.P*(evaluate(upper,bounded_point(atom))+lipschitz*dist(bounded_point(atom),atom.A))
+    if is_fully_unbounded(atom)
+      return Inf
+    end
+    closest = closest_point(atom.A, atom.corner_points)
+		return atom.P*(Sprocket.evaluate(upper,closest[1]*control)+closest[2]*LIP_CONST)
 	end
 
-	# bounded corner points
+  ## if atom is bounded, do a normal edmund madansky upper bound for the problem
 	sum = 0.0
 	for point in atom.corner_points
 		sum+= atom.corner_weights[point]*Sprocket.evaluate(upper,point*control)
@@ -245,22 +251,35 @@ function upper_bound(atom,upper,control)
 	return sum*atom.P
 end
 
-function get_probability(m_oracle,a::Baucke.Atom)
+function closest_point(point::Sprocket.Point, points::Vector{Sprocket.Point})
+  out = collect(zip(points,map(x -> Sprocket.l_one_norm(x - point), points)))
+
+  closest_point = reduce(out) do x, y
+    if x[2] < y[2]
+      return x
+    else
+      return y
+    end
+  end
+  return closest_point
+end
+
+function get_probability(m_oracle,a::Exact.Atom)
 	(zero,first) = m_oracle
 	return zero(get_generating_pair(a...))/zero(get_generating_pair(a...))
 end
 
-function get_probability(m_oracle,a::Baucke.Atom)
+function get_probability(m_oracle,a::Exact.Atom)
 	(zero,first) = m_oracle
 	return zero(get_generating_pair(a...))/zero(get_generating_pair(a...))
 end
 
-function get_average_point(m_oracle,a::Baucke.Atom)
+function get_average_point(m_oracle,a::Exact.Atom)
 	(zero,first) = m_oracle
 	return first(get_generating_pair(a...))
 end
 
-function get_generating_pair(a::Baucke.Atom)
+function get_generating_pair(a::Exact.Atom)
 	temp = sort(a.corner_points)
 	return (temp[1],temp[end])
 end
@@ -321,13 +340,21 @@ end
 function Base.all(point::Sprocket.Point)
 	out = true
 	for i in eachindex(point)
-		out = out*point[i]
+		out = out && point[i]
+	end
+	return out
+end
+
+function Base.any(point::Sprocket.Point)
+	out = false
+	for i in eachindex(point)
+		out = out || point[i]
 	end
 	return out
 end
 
 
-function Base.string(atom::Baucke.Atom)
+function Base.string(atom::Exact.Atom)
 	out = ""
 	for point in atom.corner_points
 		out *= string(point) * "\n"
@@ -337,7 +364,7 @@ function Base.string(atom::Baucke.Atom)
 	out*= "barycenter: $(atom.A)"
 end
 
-function Base.show(io::IO,atom::Baucke.Atom)
+function Base.show(io::IO,atom::Exact.Atom)
 	out = ""
 
 	for point in atom.corner_points
@@ -349,12 +376,25 @@ function Base.show(io::IO,atom::Baucke.Atom)
 	println(io,out)
 end
 
-function add_atom!(c,a::Baucke.Atom) end
-function remove_atom!(c,a::Baucke.Atom) end
+function add_atom!(c,a::Exact.Atom) end
+function remove_atom!(c,a::Exact.Atom) end
 function get_control!(c) end
 function add_cut!(c,cut) end
 
+function reltol_lower(upper::Float64, lower::Float64)
+  (upper - lower)/lower
 end
+
+function reltol_upper(upper::Float64, lower::Float64)
+  (upper - lower)/upper
+end
+
+function abstol(upper::Float64, lower::Float64)
+  upper - lower
+end
+
+end
+
 
 # TODO
 # add way of computing upper bound for unbounded atom

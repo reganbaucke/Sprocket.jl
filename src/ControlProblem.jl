@@ -1,28 +1,31 @@
 # include("./Sprocket.jl")
-# include("./Baucke.jl")
+# include("./Exact.jl")
 
 using JuMP
 using GLPK
 using .Sprocket
-using .Baucke
+using .Exact
 
 struct ControlProblem
 	model::JuMP.Model
 	control_vars::Sprocket.Point
-	epi_vars::Dict{Baucke.Atom,JuMP.VariableRef}
-	cut_constraints::Dict{Baucke.Atom,Array{JuMP.ConstraintRef}}
+	epi_vars::Dict{Exact.Atom,JuMP.VariableRef}
+	cut_constraints::Dict{Exact.Atom,Array{JuMP.ConstraintRef}}
 	cuts::Vector{Sprocket.Cut}
 end
 
 function build_control_problem(prob::Sprocket.Problem)
 	# determine the control variables
 	controls = filter(x->x.type == Sprocket.Control(),prob.vars)
+	if isempty(controls)
+		return nothing
+	end
 
 	my_model = copy(prob.model)
 	@objective(my_model,Min,0)
 
-	epi_vars = Dict{Baucke.Atom,JuMP.VariableRef}()
-	cut_constraints = Dict{Baucke.Atom,Array{JuMP.ConstraintRef}}()
+	epi_vars = Dict{Exact.Atom,JuMP.VariableRef}()
+	cut_constraints = Dict{Exact.Atom,Array{JuMP.ConstraintRef}}()
 
 
 	storage = Dict{Sprocket.Variable,Any}()
@@ -31,11 +34,10 @@ function build_control_problem(prob::Sprocket.Problem)
 	end
 
 	cuts = Sprocket.Cut[]
-	println(Sprocket.Point(storage))
-	ControlProblem(my_model,Sprocket.Point(storage),epi_vars,cut_constraints,cuts)
+	Some(ControlProblem(my_model,Sprocket.Point(storage),epi_vars,cut_constraints,cuts))
 end
 
-function add_atom(prob::ControlProblem,atom::Baucke.Atom)
+function add_atom(prob::ControlProblem,atom::Exact.Atom)
 	# create a new jump variable
 	anon = @variable(prob.model,lower_bound = -99)
 	prob.epi_vars[atom] = anon
@@ -45,7 +47,7 @@ function add_atom(prob::ControlProblem,atom::Baucke.Atom)
 	JuMP.set_objective_coefficient(prob.model, anon,atom.P)
 end
 
-function gen_constraints_for_new_atom(prob::ControlProblem,atom::Baucke.Atom)
+function gen_constraints_for_new_atom(prob::ControlProblem,atom::Exact.Atom)
 	map(x -> gen_constraint_from_cut(prob,atom,x),prob.cuts) |> (x -> map(y -> apply_constraint(prob,atom,y),x))
 end
 
@@ -55,7 +57,7 @@ function update_all_atoms_with_cut(prob::ControlProblem,cut)
 	end
 end
 
-function delete_atom(prob::ControlProblem,atom::Baucke.Atom)
+function delete_atom(prob::ControlProblem,atom::Exact.Atom)
 	# delete constraints associated to that atom from prob.model
 	map(x -> JuMP.delete(prob.model,x),prob.cut_constraints[atom])
 
@@ -66,7 +68,7 @@ function delete_atom(prob::ControlProblem,atom::Baucke.Atom)
 	delete!(prob.epi_vars,atom)
 end
 
-function gen_constraint_from_cut(prob::ControlProblem, atom::Baucke.Atom, cut::Sprocket.Cut)
+function gen_constraint_from_cut(prob::ControlProblem, atom::Exact.Atom, cut::Sprocket.Cut)
 	# first reduce the cut the average position
 	reduced_cut = Sprocket.apply_cut_at(cut,atom.A)
 
@@ -97,7 +99,7 @@ function get_new_control(prob::ControlProblem)
 	map(JuMP.value,prob.control_vars)
 end
 
-function apply_constraint(prob::ControlProblem,atom::Baucke.Atom,ex)
+function apply_constraint(prob::ControlProblem,atom::Exact.Atom,ex)
 	ref = @constraint(prob.model, 0 >= ex)
 	push!(prob.cut_constraints[atom],ref)
 end
@@ -118,7 +120,7 @@ function test()
 		Sprocket.add_variable(problem,xi)
 
 		#set the domain of the random variable
-		Sprocket.set_domain(problem,Baucke.rect_hull,(Sprocket.Point(Dict(xi =>0.0)), Sprocket.Point(Dict(xi => 1.0))))
+		Sprocket.set_domain(problem,Exact.rect_hull,(Sprocket.Point(Dict(xi =>0.0)), Sprocket.Point(Dict(xi => 1.0))))
 
 
 		u = Sprocket.Variable(name=:u, size=(),type=Sprocket.Control())
@@ -190,13 +192,13 @@ function test()
 
 	my_control_problem = build_control_problem(my_prob)
 
-	atom = Baucke.Atom()
+	atom = Exact.Atom()
 	atom.corner_points = my_prob.domain
 
-	atom.P = Baucke.compute_probability(atom,my_prob.m_oracle)
-	atom.A = Baucke.compute_average_point(atom,my_prob.m_oracle)
+	atom.P = Exact.compute_probability(atom,my_prob.m_oracle)
+	atom.A = Exact.compute_average_point(atom,my_prob.m_oracle)
 
-	Baucke.compute_weights!(atom)
+	Exact.compute_weights!(atom)
 
 	add_atom(my_control_problem,atom)
 	println(my_control_problem)

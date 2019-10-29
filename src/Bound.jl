@@ -120,7 +120,6 @@ function evaluate(lower::Lowerbound,point::Point)
 end
 
 function evaluate(upper::Upperbound,point::Point)
-	# for code readability
 	@assert(get_vars(point)==(get_vars(upper.vars)))
 
 	# we have to go through and reset the object coefficents for all the variables
