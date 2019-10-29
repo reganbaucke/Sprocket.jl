@@ -39,7 +39,9 @@ function BauckeAlgorithm()
 		atom.P = compute_probability(atom,prob.m_oracle)
 		atom.A = compute_average_point(atom,prob.m_oracle)
 
-		compute_weights!(atom)
+    if atom |> is_bounded
+  		compute_weights!(atom)
+    end
 
 		push!(atoms,atom)
 
@@ -54,12 +56,10 @@ function BauckeAlgorithm()
 			add_atom(control_problem.value , atom)
 		end
 
-
 		###
 		# Set up the initial status of the criteria
 		###
 		new_criteria = Sprocket.initial_criteria()
-
 
 		return Baucke.State(lower,upper,atoms,control_problem,new_criteria)
 	end
@@ -81,7 +81,9 @@ function BauckeAlgorithm()
 		for atom in new_atoms
 			atom.P = compute_probability(atom,prob.m_oracle)
 			atom.A = compute_average_point(atom,prob.m_oracle)
-			compute_weights!(atom)
+      if atom |> is_bounded
+  			compute_weights!(atom)
+      end
 		end
 
 		# update collection of atoms
@@ -212,7 +214,16 @@ end
 
 function is_bounded(atom::Baucke.Atom)
 	for point in atom.corner_points
-		if !all(map(x-> x!=Inf || x!=-Inf,point))
+		if any(map(x -> x == Inf || x == -Inf, point))
+			return false
+		end
+	end
+	return true
+end
+
+function is_fully_unbounded(atom::Baucke.Atom)
+	for point in get_generating_pair(atom)
+		if !all(map(x -> x == Inf || x == -Inf, point))
 			return false
 		end
 	end
@@ -222,16 +233,35 @@ end
 
 function upper_bound(atom,upper,control)
 	# unbounded corner points?
+  LIP_CONST = 10
+  ## if atom is unbounded, compute a bound based of the paper; take the closest point to the average po
 	if !is_bounded(atom)
-		return atom.P*(evaluate(upper,bounded_point(atom))+lipschitz*dist(bounded_point(atom),atom.A))
+    if is_fully_unbounded(atom)
+      return Inf
+    end
+    closest = closest_point(atom.A, atom.corner_points)
+		return atom.P*(Sprocket.evaluate(upper,closest[1]*control)+closest[2]*LIP_CONST)
 	end
 
-	# bounded corner points
+  ## if atom is bounded, do a normal edmund madansky upper bound for the problem
 	sum = 0.0
 	for point in atom.corner_points
 		sum+= atom.corner_weights[point]*Sprocket.evaluate(upper,point*control)
 	end
 	return sum*atom.P
+end
+
+function closest_point(point::Sprocket.Point, points::Vector{Sprocket.Point})
+  out = collect(zip(points,map(x -> Sprocket.l_one_norm(x - point), points)))
+
+  closest_point = reduce(out) do x, y
+    if x[2] < y[2]
+      return x
+    else
+      return y
+    end
+  end
+  return closest_point
 end
 
 function get_probability(m_oracle,a::Baucke.Atom)
@@ -310,7 +340,15 @@ end
 function Base.all(point::Sprocket.Point)
 	out = true
 	for i in eachindex(point)
-		out = out*point[i]
+		out = out && point[i]
+	end
+	return out
+end
+
+function Base.any(point::Sprocket.Point)
+	out = false
+	for i in eachindex(point)
+		out = out || point[i]
 	end
 	return out
 end
