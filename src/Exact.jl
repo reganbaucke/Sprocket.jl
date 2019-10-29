@@ -1,13 +1,13 @@
 ####
-# In this file we define the BauckeAlgorithm which will solve the optimisation problem exactly
+# In this file we define the ExactAlgorithm which will solve the optimisation problem exactly
 ####
-module Baucke
+module Exact
 
 using Combinatorics
 using ..Sprocket
 using JuMP
 
-#structs for use in BauckeAlgorithm
+#structs for use in ExactAlgorithm
 mutable struct Atom
 	corner_points
 	corner_weights
@@ -23,17 +23,17 @@ include("./ControlProblem.jl")
 struct State
 	lower::Sprocket.Lowerbound
 	upper::Sprocket.Upperbound
-	atoms::Set{Baucke.Atom}
+	atoms::Set{Exact.Atom}
 	control
 	criteria::Sprocket.Criteria
 end
 
-function BauckeAlgorithm()
+function ExactAlgorithm()
 	function initialise(prob)
 
 		atoms = Set()
 
-		atom = Baucke.Atom()
+		atom = Exact.Atom()
 		atom.corner_points = prob.domain
 
 		atom.P = compute_probability(atom,prob.m_oracle)
@@ -61,7 +61,7 @@ function BauckeAlgorithm()
 		###
 		new_criteria = Sprocket.initial_criteria()
 
-		return Baucke.State(lower,upper,atoms,control_problem,new_criteria)
+		return Exact.State(lower,upper,atoms,control_problem,new_criteria)
 	end
 
 
@@ -124,7 +124,7 @@ function BauckeAlgorithm()
     )
 
 		# return new_state
-		return Baucke.State(state.lower,state.upper,atoms,state.control,new_criteria)
+		return Exact.State(state.lower,state.upper,atoms,state.control,new_criteria)
 	end
 
   function hasmet(crit::Sprocket.Criteria,state)
@@ -134,15 +134,15 @@ function BauckeAlgorithm()
 	return (initialise,iterate,hasmet)
 end
 
-function compute_probability(atom::Baucke.Atom,oracle)
+function compute_probability(atom::Exact.Atom,oracle)
 	return oracle(get_generating_pair(atom)...)[1]
 end
 
-function compute_average_point(atom::Baucke.Atom,oracle)
+function compute_average_point(atom::Exact.Atom,oracle)
 	return oracle(get_generating_pair(atom)...)[2]/oracle(get_generating_pair(atom)...)[1]
 end
 
-function compute_weights!(atom::Baucke.Atom)
+function compute_weights!(atom::Exact.Atom)
 	@assert is_bounded(atom)
 
 	# A = zeros(dimension(vars)+1,length(atom.corner_points))
@@ -181,10 +181,10 @@ function compute_weights!(atom::Baucke.Atom)
 	return nothing
 end
 
-function split_atom(atom::Baucke.Atom,center)
+function split_atom(atom::Exact.Atom,center)
 	atoms = Set()
 	for corner in atom.corner_points
-		new_atom = Baucke.Atom()
+		new_atom = Exact.Atom()
 		new_atom.corner_points = rect_hull(corner,center)
 		push!(atoms,new_atom)
 	end
@@ -212,7 +212,7 @@ function lower_bound(atom,lower,control)
 		atom.P*(Sprocket.evaluate(lower,atom.A*control))
 end
 
-function is_bounded(atom::Baucke.Atom)
+function is_bounded(atom::Exact.Atom)
 	for point in atom.corner_points
 		if any(map(x -> x == Inf || x == -Inf, point))
 			return false
@@ -221,7 +221,7 @@ function is_bounded(atom::Baucke.Atom)
 	return true
 end
 
-function is_fully_unbounded(atom::Baucke.Atom)
+function is_fully_unbounded(atom::Exact.Atom)
 	for point in get_generating_pair(atom)
 		if !all(map(x -> x == Inf || x == -Inf, point))
 			return false
@@ -264,22 +264,22 @@ function closest_point(point::Sprocket.Point, points::Vector{Sprocket.Point})
   return closest_point
 end
 
-function get_probability(m_oracle,a::Baucke.Atom)
+function get_probability(m_oracle,a::Exact.Atom)
 	(zero,first) = m_oracle
 	return zero(get_generating_pair(a...))/zero(get_generating_pair(a...))
 end
 
-function get_probability(m_oracle,a::Baucke.Atom)
+function get_probability(m_oracle,a::Exact.Atom)
 	(zero,first) = m_oracle
 	return zero(get_generating_pair(a...))/zero(get_generating_pair(a...))
 end
 
-function get_average_point(m_oracle,a::Baucke.Atom)
+function get_average_point(m_oracle,a::Exact.Atom)
 	(zero,first) = m_oracle
 	return first(get_generating_pair(a...))
 end
 
-function get_generating_pair(a::Baucke.Atom)
+function get_generating_pair(a::Exact.Atom)
 	temp = sort(a.corner_points)
 	return (temp[1],temp[end])
 end
@@ -354,7 +354,7 @@ function Base.any(point::Sprocket.Point)
 end
 
 
-function Base.string(atom::Baucke.Atom)
+function Base.string(atom::Exact.Atom)
 	out = ""
 	for point in atom.corner_points
 		out *= string(point) * "\n"
@@ -364,7 +364,7 @@ function Base.string(atom::Baucke.Atom)
 	out*= "barycenter: $(atom.A)"
 end
 
-function Base.show(io::IO,atom::Baucke.Atom)
+function Base.show(io::IO,atom::Exact.Atom)
 	out = ""
 
 	for point in atom.corner_points
@@ -376,8 +376,8 @@ function Base.show(io::IO,atom::Baucke.Atom)
 	println(io,out)
 end
 
-function add_atom!(c,a::Baucke.Atom) end
-function remove_atom!(c,a::Baucke.Atom) end
+function add_atom!(c,a::Exact.Atom) end
+function remove_atom!(c,a::Exact.Atom) end
 function get_control!(c) end
 function add_cut!(c,cut) end
 

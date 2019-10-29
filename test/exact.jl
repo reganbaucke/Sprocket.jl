@@ -1,7 +1,7 @@
 include("../src/Sprocket.jl")
-include("../src/Baucke.jl")
+include("../src/Exact.jl")
 using .Sprocket
-using .Baucke
+using .Exact
 using JuMP
 using SpecialFunctions
 
@@ -19,7 +19,7 @@ function build_problem()
 	Sprocket.add_variable(problem,xi)
 
 	#set the domain of the random variable
-	Sprocket.set_domain(problem,Baucke.rect_hull,(Sprocket.Point(Dict(xi =>0.0)), Sprocket.Point(Dict(xi => 1.0))))
+	Sprocket.set_domain(problem,Exact.rect_hull,(Sprocket.Point(Dict(xi =>0.0)), Sprocket.Point(Dict(xi => 1.0))))
 
 	# objective function is defined through the cutting plane oracle
 	function my_cutting_plane_oracle()
@@ -66,7 +66,7 @@ end
 my_prob = build_problem()
 my_criteria = Sprocket.Criteria(reltol=0.4)
 
-states = Sprocket.solve(Baucke.BauckeAlgorithm(), my_prob, my_criteria)
+states = Sprocket.solve(Exact.ExactAlgorithm(), my_prob, my_criteria)
 
 return states
 ### ANSWER = 0.2
@@ -91,7 +91,7 @@ function build_problem()
 	Sprocket.add_variable(problem,lam)
 
 	#set the domain of the random variable
-	Sprocket.set_domain(problem,Baucke.rect_hull,(Sprocket.Point(Dict(xi =>0.0,lam => 0.0 )), Sprocket.Point(Dict(xi => 1.0, lam => 1.0))))
+	Sprocket.set_domain(problem,Exact.rect_hull,(Sprocket.Point(Dict(xi =>0.0,lam => 0.0 )), Sprocket.Point(Dict(xi => 1.0, lam => 1.0))))
 
 	# objective function is defined through the cutting plane oracle
 	function my_cutting_plane_oracle()
@@ -158,7 +158,7 @@ end
 
 my_prob = build_problem()
 # Sprocket.Criteria(reltol=0.1)
-states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations = 30))
+states = Sprocket.solve(Exact.ExactAlgorithm(),my_prob,Sprocket.Criteria(iterations = 30))
 # ANSWER = 1.35833
 return nothing
 end
@@ -177,7 +177,7 @@ function build_problem()
 	Sprocket.add_variable(problem,xi)
 
 	#set the domain of the random variable
-	Sprocket.set_domain(problem,Baucke.rect_hull,(Sprocket.Point(Dict(xi =>[0.0,0.0])), Sprocket.Point(Dict(xi => [1.0,1.0]))))
+	Sprocket.set_domain(problem,Exact.rect_hull,(Sprocket.Point(Dict(xi =>[0.0,0.0])), Sprocket.Point(Dict(xi => [1.0,1.0]))))
 
 	# objective function is defined through the cutting plane oracle
 	function my_cutting_plane_oracle()
@@ -243,7 +243,7 @@ function build_problem()
 end
 
 my_prob = build_problem()
-states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations = 60))
+states = Sprocket.solve(Exact.ExactAlgorithm(),my_prob,Sprocket.Criteria(iterations = 60))
 
 return nothing
 # ANSWER = 1.35833
@@ -263,7 +263,7 @@ function build_problem()
 	Sprocket.add_variable(problem,xi)
 
 	#set the domain of the random variable
-	Sprocket.set_domain(problem,Baucke.rect_hull,(Sprocket.Point(Dict(xi =>0.0)), Sprocket.Point(Dict(xi => 1.0))))
+	Sprocket.set_domain(problem,Exact.rect_hull,(Sprocket.Point(Dict(xi =>0.0)), Sprocket.Point(Dict(xi => 1.0))))
 
 	u = Sprocket.Variable(name=:u, size=(),type=Sprocket.Control())
 	add_variable(problem,u)
@@ -314,7 +314,7 @@ end
 
 
 my_prob = build_problem()
-states = Sprocket.solve(Baucke.BauckeAlgorithm(),my_prob,Sprocket.Criteria(iterations = 50))
+states = Sprocket.solve(Exact.ExactAlgorithm(),my_prob,Sprocket.Criteria(iterations = 50))
 return nothing
 
 end
@@ -333,7 +333,7 @@ function build_problem()
 	Sprocket.add_variable(problem,xi)
 
 	#set the domain of the random variable
-	Sprocket.set_domain(problem,Baucke.rect_hull,(Sprocket.Point(Dict(xi =>-Inf)), Sprocket.Point(Dict(xi => Inf))))
+	Sprocket.set_domain(problem,Exact.rect_hull,(Sprocket.Point(Dict(xi =>-Inf)), Sprocket.Point(Dict(xi => Inf))))
 
 	# objective function is defined through the cutting plane oracle
   # This function has unbounded support but is also Lipschitz continuous with Lipschitz constant 1
@@ -370,7 +370,7 @@ my_prob = build_problem()
 # my_criteria = Sprocket.Criteria(abstol=0.001)
 my_criteria = Sprocket.Criteria(iterations = 100)
 
-states = Sprocket.solve(Baucke.BauckeAlgorithm(), my_prob, my_criteria)
+states = Sprocket.solve(Exact.ExactAlgorithm(), my_prob, my_criteria)
 
 return states
 ### ANSWER = 0.112912
@@ -390,7 +390,7 @@ function build_problem()
 	Sprocket.add_variable(problem,xi)
 
 	#set the domain of the random variable
-	Sprocket.set_domain(problem,Baucke.rect_hull,(Sprocket.Point(Dict(xi =>-Inf)), Sprocket.Point(Dict(xi => Inf))))
+	Sprocket.set_domain(problem,Exact.rect_hull,(Sprocket.Point(Dict(xi =>-Inf)), Sprocket.Point(Dict(xi => Inf))))
 
 	u = Sprocket.Variable(name=:u, size=(),type=Sprocket.Control())
 	add_variable(problem,u)
@@ -432,7 +432,7 @@ my_prob = build_problem()
 # my_criteria = Sprocket.Criteria(abstol=0.001)
 my_criteria = Sprocket.Criteria(iterations = 20)
 
-states = Sprocket.solve(Baucke.BauckeAlgorithm(), my_prob, my_criteria)
+states = Sprocket.solve(Exact.ExactAlgorithm(), my_prob, my_criteria)
 
 return states
 
