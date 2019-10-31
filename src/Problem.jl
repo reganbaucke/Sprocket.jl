@@ -24,11 +24,10 @@ function Sprocket.add_variable(p::Problem,var::Variable)
     push!(p.vars,var)
 end
 
-function set_domain(p::Problem,f,args)
+function set_domain(p::Problem,domain)
     #verify that the point has every random variable in it and nothing more
-    domain = f(args...)
     for point in domain
-        @assert filter(x -> x.type == Random(),p.vars) == filter(x -> x.type == Random(),get_vars(point))
+        @assert filter(x -> x.type == Random(),p.vars) == get_vars(domain[1]) == get_vars(domain[2])
     end
     p.domain = domain
     return nothing
