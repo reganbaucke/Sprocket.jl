@@ -97,6 +97,20 @@ function get_vars(point::Point)
 	return Set(collect(keys(point.var_dict)))
 end
 
+function unit(vars::Set{Variable})
+	out = Dict{Variable,Any}()
+	for var in vars
+		if var.size == ()
+			out[var] = 1.0
+		else
+			out[var] = ones(var.size)
+		end
+	end
+	Point(out)
+end
+
+unit(var::Variable) = unit(Set{Variable}([var]))
+
 function Base.iterate(point::Point)
 	if isempty(point.var_dict)
 		return nothing
@@ -249,7 +263,6 @@ end
 function Base.println(io::IO,point::Point)
 	println(io,string(point))
 end
-
 
 function dimension(vars::Set{Variable})
 	dim = 0
