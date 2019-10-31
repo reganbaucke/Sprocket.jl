@@ -4,6 +4,7 @@ using .Sprocket
 using .Exact
 using JuMP
 using SpecialFunctions
+using Random
 
 
 function test_one()
@@ -105,6 +106,7 @@ end
 
 
 function test_two()
+  Random.seed!(0)
   function build_problem()
     #create an empty problem
     problem = Sprocket.Problem()
@@ -152,17 +154,17 @@ function test_two()
   p = build_problem()
   samples = []
 
-  for i = 1:3000
-    push!(samples,Sprocket.random_sample(p.m_oracle,100,p.domain))
+  for i = 1:5000
+    push!(samples,Sprocket.random_sample(p.m_oracle,6,p.domain))
   end
 
   reduce((x,y) -> x + y, samples) / length(samples)
 
-  Sprocket.proportion((0.5*Sprocket.unit(p.vars), 0.7*Sprocket.unit(p.vars)), samples)
-  p.m_oracle(0.5*Sprocket.unit(p.vars), 0.7*Sprocket.unit(p.vars))[1]
+  Sprocket.proportion((-0.5*Sprocket.unit(p.vars), 0.7*Sprocket.unit(p.vars)), samples)
+  p.m_oracle(-0.5*Sprocket.unit(p.vars), 0.7*Sprocket.unit(p.vars))[1]
 
-  println(Sprocket.proportion((0.5*Sprocket.unit(p.vars), 0.7*Sprocket.unit(p.vars)), samples))
-  println(p.m_oracle(0.5*Sprocket.unit(p.vars), 0.7*Sprocket.unit(p.vars))[1])
+  println(Sprocket.proportion((-0.5*Sprocket.unit(p.vars), 0.7*Sprocket.unit(p.vars)), samples))
+  println(p.m_oracle(-0.5*Sprocket.unit(p.vars), 0.7*Sprocket.unit(p.vars))[1])
 
 end
 
@@ -220,7 +222,7 @@ function test_three()
   p = build_problem()
   samples = []
 
-  for i = 1:3000
+  for i = 1:1000
     push!(samples,Sprocket.random_sample(p.m_oracle,10,p.domain))
   end
 
