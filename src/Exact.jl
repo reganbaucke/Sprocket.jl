@@ -130,77 +130,77 @@ function ExactAlgorithm()
 end
 
 function compute_probability(atom::Exact.Atom,oracle)
-    return oracle(get_generating_pair(atom)...)[1]
+  return oracle(get_generating_pair(atom)...)[1]
 end
 
 function compute_average_point(atom::Exact.Atom,oracle)
-    return oracle(get_generating_pair(atom)...)[2]/oracle(get_generating_pair(atom)...)[1]
+  return oracle(get_generating_pair(atom)...)[2]/oracle(get_generating_pair(atom)...)[1]
 end
 
 function compute_weights!(atom::Exact.Atom)
-    @assert is_bounded(atom)
+  @assert is_bounded(atom)
 
-    # A = zeros(dimension(vars)+1,length(atom.corner_points))
-    A = Array{Float64}(undef,Sprocket.dimension(atom.A)+1,length(atom.corner_points))
+  # A = zeros(dimension(vars)+1,length(atom.corner_points))
+  A = Array{Float64}(undef,Sprocket.dimension(atom.A)+1,length(atom.corner_points))
 
-    # save the indices in one place so the ordering over dicts with the keys is consistent
-    indices = eachindex(atom.A)
+  # save the indices in one place so the ordering over dicts with the keys is consistent
+  indices = eachindex(atom.A)
 
-    for (i,point) in enumerate(atom.corner_points)
+  for (i,point) in enumerate(atom.corner_points)
     col = Float64[]
     for i in indices
-    push!(col,point[i])
+      push!(col,point[i])
     end
     # push the last entry as the constraint that weights sum to one
     push!(col,1.0)
     A[:,i] = col
-    end
+  end
 
-    b = Float64[]
-    for i in indices
+  b = Float64[]
+  for i in indices
     push!(b,atom.A[i])
-    end
-    # push the last entry as the constraint that weights sum to one
-    push!(b,1.0)
+  end
+  # push the last entry as the constraint that weights sum to one
+  push!(b,1.0)
 
-    #compute the minimum norm whose solution corresponds to the most even weights
-    weights = transpose(A)*(A*transpose(A)\b)
+  #compute the minimum norm whose solution corresponds to the most even weights
+  weights = transpose(A)*(A*transpose(A)\b)
 
 
-    atom.corner_weights = Dict{Any,Float64}()
-    # assign weights
-    for i in eachindex(atom.corner_points)
+  atom.corner_weights = Dict{Any,Float64}()
+  # assign weights
+  for i in eachindex(atom.corner_points)
     atom.corner_weights[atom.corner_points[i]] = weights[i]
-    end
+  end
 
-    return nothing
+  return nothing
 end
 
 function split_atom(atom::Exact.Atom,center)
-    atoms = Set()
-    for corner in atom.corner_points
-    new_atom = Exact.Atom()
-    new_atom.corner_points = rect_hull(corner,center)
-    push!(atoms,new_atom)
-    end
-    return atoms
+  atoms = Set()
+  for corner in atom.corner_points
+  new_atom = Exact.Atom()
+  new_atom.corner_points = rect_hull(corner,center)
+  push!(atoms,new_atom)
+  end
+  return atoms
 end
 
 
 function largest_bound_gap(atoms,control,(lower,upper))
-    atoms = collect(atoms)
-    gap = zeros(size(atoms))
-    upper_val = zeros(size(atoms))
-    lower_val = zeros(size(atoms))
-    for (i,atom) in enumerate(atoms)
-    upper_val[i] = upper_bound(atom,upper,control)
-    lower_val[i] = lower_bound(atom,lower,control)
-    gap[i] = upper_bound(atom,upper,control)-lower_bound(atom,lower,control)
-    end
+  atoms = collect(atoms)
+  gap = zeros(size(atoms))
+  upper_val = zeros(size(atoms))
+  lower_val = zeros(size(atoms))
+  for (i,atom) in enumerate(atoms)
+  upper_val[i] = upper_bound(atom,upper,control)
+  lower_val[i] = lower_bound(atom,lower,control)
+  gap[i] = upper_bound(atom,upper,control)-lower_bound(atom,lower,control)
+  end
 
-    (value,index) = findmax(gap)
+  (value,index) = findmax(gap)
 
-    return (atoms[index], sum(upper_val), sum(lower_val))
+  return (atoms[index], sum(upper_val), sum(lower_val))
 end
 
 function lower_bound(atom,lower,control)
@@ -217,33 +217,33 @@ function is_bounded(atom::Exact.Atom)
 end
 
 function is_fully_unbounded(atom::Exact.Atom)
-    for point in get_generating_pair(atom)
+  for point in get_generating_pair(atom)
     if !all(map(x -> x == Inf || x == -Inf, point))
-    return false
+      return false
     end
-    end
-    return true
+  end
+  return true
 end
 
 
 function upper_bound(atom,upper,control)
-    # unbounded corner points?
+  # unbounded corner points?
   LIP_CONST = 10
   ## if atom is unbounded, compute a bound based of the paper; take the closest point to the average po
-    if !is_bounded(atom)
+  if !is_bounded(atom)
     if is_fully_unbounded(atom)
       return Inf
     end
     closest = closest_point(atom.A, atom.corner_points)
     return atom.P*(Sprocket.evaluate(upper,closest[1]*control)+closest[2]*LIP_CONST)
-    end
+  end
 
   ## if atom is bounded, do a normal edmund madansky upper bound for the problem
-    sum = 0.0
-    for point in atom.corner_points
+  sum = 0.0
+  for point in atom.corner_points
     sum+= atom.corner_weights[point]*Sprocket.evaluate(upper,point*control)
-    end
-    return sum*atom.P
+  end
+  return sum*atom.P
 end
 
 function closest_point(point::Sprocket.Point, points::Vector{Sprocket.Point})
@@ -260,115 +260,115 @@ function closest_point(point::Sprocket.Point, points::Vector{Sprocket.Point})
 end
 
 function get_probability(m_oracle,a::Exact.Atom)
-    (zero,first) = m_oracle
-    return zero(get_generating_pair(a...))/zero(get_generating_pair(a...))
+  (zero,first) = m_oracle
+  return zero(get_generating_pair(a...))/zero(get_generating_pair(a...))
 end
 
 function get_probability(m_oracle,a::Exact.Atom)
-    (zero,first) = m_oracle
-    return zero(get_generating_pair(a...))/zero(get_generating_pair(a...))
+  (zero,first) = m_oracle
+  return zero(get_generating_pair(a...))/zero(get_generating_pair(a...))
 end
 
 function get_average_point(m_oracle,a::Exact.Atom)
-    (zero,first) = m_oracle
-    return first(get_generating_pair(a...))
+  (zero,first) = m_oracle
+  return first(get_generating_pair(a...))
 end
 
 function get_generating_pair(a::Exact.Atom)
-    temp = sort(a.corner_points)
-    return (temp[1],temp[end])
+  temp = sort(a.corner_points)
+  return (temp[1],temp[end])
 end
 
 
 function rect_hull(x::Vector,y::Vector)
-    hull=[]
-    for i in powerset(1:length(x))
+  hull=[]
+  for i in powerset(1:length(x))
     z = copy(x)
     z[i] = y[i]
     push!(hull,z)
-    end
-    return hull
+  end
+  return hull
 end
 
 function rect_hull(x::Sprocket.Point,y::Sprocket.Point)
-    # save in one place
-    out = Sprocket.Point[]
+  # save in one place
+  out = Sprocket.Point[]
 
-    indices = eachindex(x)
+  indices = eachindex(x)
 
-    x_array = []
-    y_array = []
+  x_array = []
+  y_array = []
 
-    for i in indices
+  for i in indices
     push!(x_array,x[i])
     push!(y_array,y[i])
-    end
+  end
 
-    hull = rect_hull(x_array,y_array)
+  hull = rect_hull(x_array,y_array)
 
-    for point in hull
+  for point in hull
     z = deepcopy(x)
     for i in 1:length(indices)
-    z[indices[i]] = point[i]
+      z[indices[i]] = point[i]
     end
     push!(out,z)
-    end
-    return out
+  end
+  return out
 end
 
 
 function Base.:<=(point_1::Sprocket.Point,point_2::Sprocket.Point)
-    all(Sprocket.combine((x,y) -> x <= y, point_1,point_2))
+  all(Sprocket.combine((x,y) -> x <= y, point_1,point_2))
 end
 
 function Base.:<(point_1::Sprocket.Point,point_2::Sprocket.Point)
-    all(Sprocket.combine((x,y) -> x < y, point_1,point_2))
+  all(Sprocket.combine((x,y) -> x < y, point_1,point_2))
 end
 
 ###
 # for sorting
 ###
 function Base.isless(point_1::Sprocket.Point,point_2::Sprocket.Point)
-    point_1 <= point_2
+  point_1 <= point_2
 end
 
 function Base.all(point::Sprocket.Point)
-    out = true
-    for i in eachindex(point)
+  out = true
+  for i in eachindex(point)
     out = out && point[i]
-    end
-    return out
+  end
+  return out
 end
 
 function Base.any(point::Sprocket.Point)
-    out = false
-    for i in eachindex(point)
+  out = false
+  for i in eachindex(point)
     out = out || point[i]
-    end
-    return out
+  end
+  return out
 end
 
 
 function Base.string(atom::Exact.Atom)
-    out = ""
-    for point in atom.corner_points
+  out = ""
+  for point in atom.corner_points
     out *= string(point) * "\n"
-    end
+  end
 
-    out*= "probability: $(atom.P) \n"
-    out*= "barycenter: $(atom.A)"
+  out*= "probability: $(atom.P) \n"
+  out*= "barycenter: $(atom.A)"
 end
 
 function Base.show(io::IO,atom::Exact.Atom)
-    out = ""
+  out = ""
 
-    for point in atom.corner_points
+  for point in atom.corner_points
     out *= string(point) * "\n"
-    end
+  end
 
-    out*= "probability: $(atom.P) \n"
-    out*= "barycenter: $(atom.A)"
-    println(io,out)
+  out*= "probability: $(atom.P) \n"
+  out*= "barycenter: $(atom.A)"
+  println(io,out)
 end
 
 function add_atom!(c,a::Exact.Atom) end
