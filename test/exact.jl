@@ -1,5 +1,6 @@
 include("../src/Sprocket.jl")
-include("../src/Exact.jl")
+include("../src/Exact/Exact.jl")
+
 using .Sprocket
 using .Exact
 using JuMP
@@ -318,8 +319,9 @@ end
 
 
 my_prob = build_problem()
-states = Sprocket.solve(Exact.ExactAlgorithm(),my_prob,Sprocket.Criteria(iterations = 100))
-return nothing
+
+my_criteria = Sprocket.Criteria(reltol = 0.01)
+states = Sprocket.solve(Exact.ExactAlgorithm(),my_prob,my_criteria)
 
 end
 
