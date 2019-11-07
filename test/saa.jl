@@ -69,11 +69,11 @@ function test_one()
 
    #Generate samples for SAA
    samples = Sprocket.Point[]
-   for i = 1 : 10
+   for i = 1 : 100
       push!(samples, Sprocket.random_sample(my_prob.m_oracle,10.0, my_prob.domain))
    end
 
-   my_criteria = Sprocket.Criteria(iterations = 30)
+   my_criteria = Sprocket.Criteria(iterations = 60)
    states = Sprocket.solve(SAA.SAAAlgorithm(samples,SAA.MultiCut()), my_prob, my_criteria)
 
    return states
@@ -167,8 +167,15 @@ function test_two()
    end
 
    my_prob = build_problem()
-   # Sprocket.Criteria(reltol=0.1)
-   states = Sprocket.solve(Exact.ExactAlgorithm(),my_prob,Sprocket.Criteria(iterations = 30))
+
+   samples = Sprocket.Point[]
+   for i = 1 : 20
+      push!(samples, Sprocket.random_sample(my_prob.m_oracle,10.0, my_prob.domain))
+   end
+
+   states = Sprocket.solve(SAA.SAAAlgorithm(samples, SAA.MultiCut()),my_prob,Sprocket.Criteria(iterations = 20))
+   states[end].criteria.lower
+
    # ANSWER = 1.35833
    return nothing
 end
@@ -176,7 +183,6 @@ end
 ##
 # Test 3, two dimensional problem, one variable with two entries
 ##
-
 function test_three()
    function build_problem()
       #create an empty problem
@@ -196,7 +202,7 @@ function test_three()
 
             grad = deepcopy(vars)
             grad[:xi][1] =   2*vars[:xi][1] + 0.1*vars[:xi][2]
-            grad[:xi][2] = 0.1*vars[:xi][1] +   6*vars[:xi][2]
+            grad[:xi][2] = 0.1*vars[:xi][1] + 6.0*vars[:xi][2]
 
             return (value,grad)
          end
@@ -253,9 +259,15 @@ function test_three()
    end
 
    my_prob = build_problem()
-   states = Sprocket.solve(Exact.ExactAlgorithm(),my_prob,Sprocket.Criteria(iterations = 60))
 
-   return nothing
+   samples = Sprocket.Point[]
+   for i = 1 : 20
+      push!(samples, Sprocket.random_sample(my_prob.m_oracle,10.0, my_prob.domain))
+   end
+
+   states = Sprocket.solve(SAA.SAAAlgorithm(samples, SAA.MultiCut()),my_prob,Sprocket.Criteria(iterations = 2))
+   states[end].criteria.lower
+
    # ANSWER = 1.35833
 end
 

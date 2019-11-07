@@ -19,7 +19,7 @@ end
 function SAAAlgorithm(samples, version::AlgorithmVersion)
    function initialise(prob)
       ###
-      # Set up the control problem
+      # Set up the lower bound problem
       ###
       lower_bound = build_lower_problem(prob,samples,version)
 
@@ -73,9 +73,6 @@ end
 function build_lower_problem(prob::Sprocket.Problem, samples::Vector{Sprocket.Point}, version::SAA.MultiCut)
    # determine the control variables
    controls = filter(x->x.type == Sprocket.Control(),prob.vars)
-   if isempty(controls)
-      return nothing
-   end
 
    my_model = copy(prob.model)
    @objective(my_model,Min,0)
