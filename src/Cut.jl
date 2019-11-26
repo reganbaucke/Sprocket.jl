@@ -11,7 +11,7 @@ end
 # 	return Cut(point,val,grad)
 # end
 
-function generate_cut(c_oracle,point::Point)
+function generate_cut(c_oracle, point::Point)
 	(val,grad) = c_oracle(point)
 	return Cut(point,val,grad)
 end

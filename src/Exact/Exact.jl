@@ -90,6 +90,8 @@ function ExactAlgorithm()
       union!(atoms,new_atoms)
       delete!(atoms,biggest_bound)
 
+      println(center_point*control)
+      
       # get cut at this point
       cut = Sprocket.generate_cut(prob.c_oracle,center_point*control)
 

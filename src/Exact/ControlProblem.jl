@@ -41,7 +41,7 @@ function add_atom(prob::ControlProblem,atom::Exact.Atom)
    prob.cut_constraints[atom] = JuMP.ConstraintRef[]
 
    # set objective value of the as the probability of the atom
-   JuMP.set_objective_coefficient(prob.model, anon,atom.P)
+   JuMP.set_objective_coefficient(prob.model, anon, atom.P)
 end
 
 function gen_constraints_for_new_atom(prob::ControlProblem,atom::Exact.Atom)

@@ -36,7 +36,7 @@ function Lowerbound(vars::Set{Variable}, initial_lower::Float64)
 	point=Dict{Variable,Union{JuMP.VariableRef,Array{JuMP.VariableRef}}}()
 
 	for var in vars
-		point[var] = create_jump_variable(model,var.name,var.size)
+		point[var] = create_jump_variable(model,var.name,())
 	end
 
 	## add the epigraph variable
@@ -57,7 +57,7 @@ function Upperbound(vars::Set{Variable}, initial_upper, lipschitz_bound)
 
 	## for the control variables, set up the JuMP Variables
 	for var in vars
-		point[var] = create_jump_variable(model,var.name,var.size, (-lipschitz_bound,lipschitz_bound))
+		point[var] = create_jump_variable(model,var.name, (), (-lipschitz_bound,lipschitz_bound))
 	end
 
 	## add the intercept variable
