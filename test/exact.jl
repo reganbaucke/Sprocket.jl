@@ -67,9 +67,9 @@ function test_one()
 
 
    my_prob = build_problem()
-   my_criteria = Sprocket.Criteria(reltol=0.1)
+   my_criteria = Sprocket.Criteria(m_calls=17)
 
-   states = Sprocket.solve(Exact.ExactAlgorithm(), my_prob, my_criteria)
+   states = Sprocket.solve(Exact.ExactAlgorithm(4.0), my_prob, my_criteria)
 
    return states
    ### ANSWER = 0.2
@@ -163,7 +163,7 @@ function test_two()
 
    my_prob = build_problem()
    # Sprocket.Criteria(reltol=0.1)
-   states = Sprocket.solve(Exact.ExactAlgorithm(),my_prob,Sprocket.Criteria(iterations = 30))
+   states = Sprocket.solve(Exact.ExactAlgorithm(4.0),my_prob,Sprocket.Criteria(iterations = 30))
    # ANSWER = 1.35833
    # return nothing
 end
@@ -237,7 +237,7 @@ function test_four()
    my_prob = build_problem()
 
    my_criteria = Sprocket.Criteria(reltol = 0.01)
-   states = Sprocket.solve(Exact.ExactAlgorithm(),my_prob,my_criteria)
+   states = Sprocket.solve(Exact.ExactAlgorithm(4.0),my_prob,my_criteria)
 
 end
 
@@ -293,7 +293,7 @@ function test_five()
    # my_criteria = Sprocket.Criteria(abstol=0.001)
    my_criteria = Sprocket.Criteria(iterations = 100)
 
-   states = Sprocket.solve(Exact.ExactAlgorithm(), my_prob, my_criteria)
+   states = Sprocket.solve(Exact.ExactAlgorithm(4.0), my_prob, my_criteria)
 
    return states
    ### ANSWER = 0.112912
@@ -354,11 +354,11 @@ function test_six()
 
    my_prob = build_problem()
    # my_criteria = Sprocket.Criteria(abstol=0.001)
-   my_criteria = Sprocket.Criteria(iterations = 20)
+   my_criteria = Sprocket.Criteria(abstol = 0.001)
 
-   states = Sprocket.solve(Exact.ExactAlgorithm(), my_prob, my_criteria)
+   states = Sprocket.solve(Exact.ExactAlgorithm(4.0), my_prob, my_criteria)
 
-   return states
+   return states[end].criteria
    # don't know the true answer
 end
 

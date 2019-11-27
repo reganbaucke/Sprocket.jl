@@ -28,7 +28,7 @@ struct State
    criteria::Sprocket.Criteria
 end
 
-function ExactAlgorithm()
+function ExactAlgorithm(lipschitz_constant)
    function initialise(prob)
 
       atoms = Set()
@@ -46,7 +46,7 @@ function ExactAlgorithm()
       push!(atoms,atom)
 
       lower = Sprocket.Lowerbound(prob.vars,-99.0)
-      upper = Sprocket.Upperbound(prob.vars,99.0,5.0)
+      upper = Sprocket.Upperbound(prob.vars,99.0, lipschitz_constant)
 
       ###
       # Set up the control problem
@@ -90,8 +90,6 @@ function ExactAlgorithm()
       union!(atoms,new_atoms)
       delete!(atoms,biggest_bound)
 
-      println(center_point*control)
-      
       # get cut at this point
       cut = Sprocket.generate_cut(prob.c_oracle,center_point*control)
 
@@ -113,11 +111,12 @@ function ExactAlgorithm()
       # Update Criteria
       ###
       new_criteria = Sprocket.update_with(state.criteria,
-      iterations = state.criteria.iterations + 1,
-      upper = upper_bound,
-      lower = lower_bound,
-      abstol = abstol(upper_bound,lower_bound),
-      reltol = reltol_upper(upper_bound,lower_bound)
+         iterations = state.criteria.iterations + 1,
+         upper = upper_bound,
+         lower = lower_bound,
+         abstol = abstol(upper_bound,lower_bound),
+         reltol = reltol_upper(upper_bound,lower_bound),
+         m_calls = state.criteria.m_calls + 1
       )
 
       # return new_state
@@ -374,11 +373,11 @@ function Base.show(io::IO,atom::Exact.Atom)
 end
 
 function reltol_lower(upper::Float64, lower::Float64)
-   (upper - lower)/lower
+   abs(upper - lower)/abs(lower)
 end
 
 function reltol_upper(upper::Float64, lower::Float64)
-   (upper - lower)/upper
+   abs(upper - lower)/abs(upper)
 end
 
 function abstol(upper::Float64, lower::Float64)
