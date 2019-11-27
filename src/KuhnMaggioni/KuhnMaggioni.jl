@@ -6,8 +6,9 @@ module KuhnMaggioni
 using Combinatorics
 using ..Sprocket
 using JuMP
+using GLPK
 
-#structs for use in ExactAlgorithm
+#structs for use
 mutable struct Atom
    corner_points
    corner_weights
@@ -21,125 +22,73 @@ end
 # include("./ControlProblem.jl")
 
 struct State
-   lower::Sprocket.Lowerbound
-   upper::Sprocket.Upperbound
+   lower
    atoms::Set{KuhnMaggioni.Atom}
-   control
    criteria::Sprocket.Criteria
 end
-
-# input to this function is something called division. for divisions
-# I should be able to use to get the number of divisions for each dimension of the uncertainty
-# for i in eachindex(divisions)
-#    divisions[i]
-# end
-
 
 function Algorithm(divisions)
    function initialise(prob)
       # verify that the domain is bounded
 
-      atoms = Set()
+      # generate lists of pairs of points to generate atoms
+      pairs = cartesian_product(divisions,prob.domain)
+
       # divide up the domain and create all the atoms according to the division parameter
-      product_producer = Dict()
-      for i in eachindex(prob.domain[1])
-         division_for_this_point = []
-         for j in 0:divisions(i)
-            push!(division_for_this_point, prob.domain[1][i] + j * (prob.domain[2][i] - prob.domain[1][i]) / division(i) )
-         end
-         product_producer[i] = division_for_this_point
-      end
+      atoms = Set()
 
+      for pair in pairs
+         atom = KuhnMaggioni.Atom()
 
-      atom = Exact.Atom()
-      atom.corner_points = rect_hull(prob.domain...)
-
-      atom.P = compute_probability(atom,prob.m_oracle)
-      atom.A = compute_average_point(atom,prob.m_oracle)
-
-      if atom |> is_bounded
+         atom.corner_points = rect_hull(pair...)
+         atom.P = compute_probability(atom,prob.m_oracle)
+         atom.A = compute_average_point(atom,prob.m_oracle)
          compute_weights!(atom)
+
+         push!(atoms,atom)
       end
 
-      push!(atoms,atom)
+      lower_bound = build_lower_problem(prob,atoms)
 
-      lower = Sprocket.Lowerbound(prob.vars,-99.0)
-      upper = Sprocket.Upperbound(prob.vars,99.0,5.0)
+      # start the criteria with the number of measure oracle calls made
+      criteria = Sprocket.update_with(Sprocket.initial_criteria(),
+         m_calls = Sprocket.fold( *, 1, divisions)
+      )
 
-      ###
-      # Set up the control problem
-      ###
-      control_problem = build_control_problem(prob)
-      if control_problem != nothing
-         add_atom(control_problem.value , atom)
-      end
-
-      ###
-      # Set up the initial status of the criteria
-      ###
-      new_criteria = Sprocket.initial_criteria()
-
-      return Exact.State(lower,upper,atoms,control_problem,new_criteria)
+      return KuhnMaggioni.State(lower_bound, atoms, criteria)
    end
 
 
    function iterate(state,prob)
+      (control, lower_bound_val) = get_new_control(state.lower)
 
-      control = map(get_new_control, state.control)
+      ###
+      # Update compute an upper bound
+      ###
+      upper_bound_val = compute_upper_bound(prob.c_oracle,state.atoms,control)
+
+      # compute cuts from oracle at points
+      for atom in state.atoms
+         cut = Sprocket.generate_cut(prob.c_oracle,atom.A*control)
+         expression = gen_constraint_from_cut(state.lower, atom, cut)
+         apply_constraint(state.lower, atom, expression)
+         add_cut!(state.lower, cut)
+      end
+
+      # update criteria
+      new_criteria = Sprocket.update_with(state.criteria,
+         iterations = state.criteria.iterations + 1,
+         lower = lower_bound_val,
+         upper = upper_bound_val,
+         abstol = abstol(upper_bound_val,lower_bound_val),
+         reltol = reltol_upper(upper_bound_val,lower_bound_val)
+      )
 
       # compute the bound gap at the new control
       # biggest_bound = largest_bound_gap(state.atoms,(state.lower,state.upper))
 
-      (biggest_bound, upper_bound, lower_bound )= largest_bound_gap(state.atoms,control,(state.lower,state.upper))
-
-      atoms = copy(state.atoms)
-      for atom in atoms
-         center_point = compute_average_point(atom,prob.m_oracle)
-
-         new_atoms = split_atom(atom,center_point)
-         for atom_j in new_atoms
-            atom.P = compute_probability(atom_j,prob.m_oracle)
-            atom.A = compute_average_point(atom_jj,prob.m_oracle)
-            if atom_jj |> is_bounded
-               compute_weights!(atom)
-            end
-         end
-
-         # update collection of atoms
-         union!(atoms,new_atoms)
-         delete!(atoms,biggest_bound)
-
-         # get cut at this point
-         cut = Sprocket.generate_cut(prob.c_oracle,center_point*control)
-
-         # update control problem
-         if state.control != nothing
-            delete_atom(state.control.value,biggest_bound)
-            for atom in new_atoms
-               add_atom(state.control.value,atom)
-               gen_constraints_for_new_atom(state.control.value,atom)
-            end
-            update_all_atoms_with_cut(state.control.value,cut)
-            add_cut!(state.control.value,cut)
-         end
-
-         Sprocket.update!(state.lower,cut)
-         Sprocket.update!(state.upper,cut)
-      end
-
-      ###
-      # Update Criteria
-      ###
-      new_criteria = Sprocket.update_with(state.criteria,
-      iterations = state.criteria.iterations + 1,
-      upper = upper_bound,
-      lower = lower_bound,
-      abstol = abstol(upper_bound,lower_bound),
-      reltol = reltol_upper(upper_bound,lower_bound)
-      )
-
       # return new_state
-      return KuhnMaggioni.State(state.lower,state.upper,atoms,state.control,new_criteria)
+      return KuhnMaggioni.State(state.lower, state.atoms, new_criteria)
    end
 
    function hasmet(crit::Sprocket.Criteria,state)
@@ -149,11 +98,12 @@ function Algorithm(divisions)
    return (initialise,iterate,hasmet)
 end
 
-function compute_probability(atom::KuhnMaggioni.Atom,oracle)
+
+function compute_probability(atom::KuhnMaggioni.Atom, oracle)
    return oracle(get_generating_pair(atom)...)[1]
 end
 
-function compute_average_point(atom::KuhnMaggioni.Atom,oracle)
+function compute_average_point(atom::KuhnMaggioni.Atom, oracle)
    return oracle(get_generating_pair(atom)...)[2]/oracle(get_generating_pair(atom)...)[1]
 end
 
@@ -163,8 +113,6 @@ function cartesian_product(division,domain)
    #
 
    # instead of two points, make one list of pairs of points
-
-   println(domain)
    new_domain = zip(domain...)
    # println(new_domain)
 
@@ -180,25 +128,105 @@ function cartesian_product(division,domain)
       one_d_atoms
    end
 
-   println("got here")
-   Sprocket.combine(merge,division,new_domain)
+   point_of_pairs = Sprocket.combine(merge,division,new_domain)
 
+   # we now have a point of lists of pairs
+   # we want to have a list of pairs of points
+   list = []
+   for var in eachindex(point_of_pairs)
+      inner_list = []
+      for pair in point_of_pairs[var]
+         push!(inner_list, (Sprocket.Point(Dict( var => pair[1])), Sprocket.Point(Dict( var => pair[2]))) )
+      end
+      push!(list, inner_list)
+   end
 
+   function cartesian(listOfPoints,newList)
+      out = []
+      if isempty(listOfPoints)
+         return newList
+      end
+      for orig in listOfPoints
+         for new in newList
+            push!(out, (orig[1]*new[1], orig[2]*new[2]))
+            # push!(out, orig[2]*new[1])
+            # push!(out, orig[1]*new[2])
+            # push!(out, orig[2]*new[2])
+         end
+      end
+      out
+   end
 
-   # # for each division, create an array of the pairs of points in the division
-   # for i in eachindex(domain[1])
-   #    one_d_atoms[i] = []
-   #    for j in 1:x
-   #       push!(one_d_atoms[i],
-   #          (domain[1][i] + (j - 1)*(domain[2][i] - domain[1][i])/division[i],
-   #          domain[1][i] + (j)*(domain[2][i] - domain[1][i])/division[i]))
-   #    end
-   # end
+   out = []
+   for inner_list in list
+      out = cartesian(out, inner_list)
+   end
+   out
 
-   # one_d_atoms
+end
 
-   # with these lists of lists, form the list which is the cartesian products of these lists
+struct ControlProblem
+   model::JuMP.Model
+   control_vars::Sprocket.Point
+   epi_vars::Dict{KuhnMaggioni.Atom,JuMP.VariableRef}
+   cut_constraints::Dict{KuhnMaggioni.Atom,Vector{JuMP.ConstraintRef}}
+   cuts::Vector{Sprocket.Cut}
+end
 
+function build_lower_problem(prob::Sprocket.Problem, atoms)
+   # determine the control variables
+   controls = filter(x->x.type == Sprocket.Control(),prob.vars)
+
+   my_model = copy(prob.model)
+   @objective(my_model,Min,0)
+
+   epi_vars = Dict{KuhnMaggioni.Atom,JuMP.VariableRef}()
+   for atom in atoms
+      epi_vars[atom] = @variable(my_model, lower_bound = -99)
+      JuMP.set_objective_coefficient(my_model,epi_vars[atom],atom.P)
+   end
+
+   cut_constraints = Dict{KuhnMaggioni.Atom, Array{JuMP.ConstraintRef}}()
+   for atom in atoms
+      cut_constraints[atom] = JuMP.ConstraintRef[]
+   end
+
+   storage = Dict{Sprocket.Variable,Any}()
+   for control in controls
+      storage[control] = my_model.obj_dict[control.name]
+   end
+
+   cuts = Sprocket.Cut[]
+
+   ControlProblem(my_model,Sprocket.Point(storage),epi_vars,cut_constraints,cuts)
+end
+
+function get_new_control(prob::ControlProblem)
+   if prob.model.moi_backend.optimizer == nothing
+      JuMP.optimize!(prob.model,with_optimizer(GLPK.Optimizer))
+   else
+      JuMP.optimize!(prob.model)
+   end
+   (map(JuMP.value,prob.control_vars), JuMP.objective_value(prob.model))
+end
+
+function compute_upper_bound(c_oracle,atoms,control)
+   oracle_cache = Dict()
+   upper = 0.0
+   for atom in atoms
+      upper_on_this_atom = 0.0
+      for point in atom.corner_points
+         if point in keys(oracle_cache)
+            upper_on_this_atom += oracle_cache[point]*atom.corner_weights[point]*atom.P
+         else
+            oracle_cache[point] = c_oracle(point*control)[1]
+            upper_on_this_atom += oracle_cache[point]*atom.corner_weights[point]*atom.P
+         end
+      end
+      upper += upper_on_this_atom
+   end
+
+   upper
 end
 
 function compute_weights!(atom::KuhnMaggioni.Atom)
@@ -240,33 +268,6 @@ function compute_weights!(atom::KuhnMaggioni.Atom)
    return nothing
 end
 
-function split_atom(atom::KuhnMaggioni.Atom,center)
-   atoms = Set()
-   for corner in atom.corner_points
-      new_atom = Exact.Atom()
-      new_atom.corner_points = rect_hull(corner,center)
-      push!(atoms,new_atom)
-   end
-   return atoms
-end
-
-
-function largest_bound_gap(atoms,control,(lower,upper))
-   atoms = collect(atoms)
-   gap = zeros(size(atoms))
-   upper_val = zeros(size(atoms))
-   lower_val = zeros(size(atoms))
-   for (i,atom) in enumerate(atoms)
-      upper_val[i] = upper_bound(atom,upper,control)
-      lower_val[i] = lower_bound(atom,lower,control)
-      gap[i] = upper_bound(atom,upper,control)-lower_bound(atom,lower,control)
-   end
-
-   (value,index) = findmax(gap)
-
-   return (atoms[index], sum(upper_val), sum(lower_val))
-end
-
 function lower_bound(atom,lower,control)
    atom.P*(Sprocket.evaluate(lower,atom.A*control))
 end
@@ -289,38 +290,31 @@ function is_fully_unbounded(atom::KuhnMaggioni.Atom)
    return true
 end
 
+function gen_constraint_from_cut(prob, atom, cut)
+   reduced_cut = Sprocket.apply_cut_at(cut, atom.A)
 
-function upper_bound(atom,upper,control)
-   # unbounded corner points?
-   LIP_CONST = 10
-   ## if atom is unbounded, compute a bound based of the paper; take the closest point to the average po
-   if !is_bounded(atom)
-      if is_fully_unbounded(atom)
-         return Inf
-      end
-      closest = closest_point(atom.A, atom.corner_points)
-      return atom.P*(Sprocket.evaluate(upper,closest[1]*control)+closest[2]*LIP_CONST)
+   # build up constraint in an affine expression
+   ex = JuMP.AffExpr(0.0)
+
+   for i in eachindex(prob.control_vars)
+      JuMP.add_to_expression!(ex,reduced_cut.grad[i]*(prob.control_vars[i] - reduced_cut.point[i]))
    end
 
-   ## if atom is bounded, do a normal edmund madansky upper bound for the problem
-   sum = 0.0
-   for point in atom.corner_points
-      sum+= atom.corner_weights[point]*Sprocket.evaluate(upper,point*control)
-   end
-   return sum*atom.P
+   # add the constant term of the cut value
+   JuMP.add_to_expression!(ex,reduced_cut.value)
+
+   # add the epigraph variable associated with this atom
+   JuMP.add_to_expression!(ex, - prob.epi_vars[atom])
+   return ex
 end
 
-function closest_point(point::Sprocket.Point, points::Vector{Sprocket.Point})
-   out = collect(zip(points,map(x -> Sprocket.l_one_norm(x - point), points)))
+function apply_constraint(prob::ControlProblem, atom, ex)
+   ref = @constraint(prob.model, 0 >= ex)
+   push!(prob.cut_constraints[atom],ref)
+end
 
-   closest_point = reduce(out) do x, y
-      if x[2] < y[2]
-         return x
-      else
-         return y
-      end
-   end
-   return closest_point
+function add_cut!(prob::ControlProblem,cut::Sprocket.Cut)
+   push!(prob.cuts,cut)
 end
 
 function get_probability(m_oracle,a::KuhnMaggioni.Atom)
@@ -452,6 +446,18 @@ function list_of_cartesian_product(divisions::Dict)
    for keys in divisions
 
    end
+end
+
+function reltol_lower(upper::Float64, lower::Float64)
+   abs(upper - lower)/abs(lower)
+end
+
+function reltol_upper(upper::Float64, lower::Float64)
+   abs(upper - lower)/abs(upper)
+end
+
+function abstol(upper::Float64, lower::Float64)
+   upper - lower
 end
 
 end
