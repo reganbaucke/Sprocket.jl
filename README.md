@@ -5,7 +5,7 @@ Sprocket: (S)tochastic (PRO)gramming
 Sprocket is a framework for describing stochastic programmes in an
 algorithm-agnostic fashion.
 
-One a problem has been described, the user can implement an algorithm to solve
+Once a problem has been described, the user can implement an algorithm to solve
 the problem, or she can use an algorithm that we've prepared earlier.
 Sprocket was developed to compare the speeds of different solution
 algorithms in a fair and consistent manner. Besides this, Sprocket is a great
